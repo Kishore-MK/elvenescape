@@ -1,5 +1,5 @@
 # The World address to index.
-world_address = "0x0212a371cbe6811255c517af1112db3882068ed8c0e1051ee7e883225d166d79"
+world_address = "0x06e338c91323a845075df5579d05fca3e07bff29129102e66085a49fcb4f1e41"
  
 # Default RPC URL configuration
 rpc = "https://api.cartridge.gg/x/starknet/sepolia"
@@ -22,6 +22,5 @@ historical = [
   "kaadugame-Position",
   "kaadugame-Inventory",
   "kaadugame-Health",
-  "kaadugame-OverloadState",
-  "kaadugame-CurrentEncounter"
+  "kaadugame-OverloadState" 
 ]

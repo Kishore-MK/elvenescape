@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { useAccount } from "@starknet-react/core";
 import { Account } from "starknet";
 import { useDojoSDK } from "@dojoengine/sdk/react";
@@ -7,221 +6,125 @@ import { useStarknetConnect } from "./useStarknetConnect";
 import useAppStore, { GamePhase } from "../../zustand/store";
 import { usePlayer } from "./usePlayer";
 
-// Types
 interface InitializeState {
-  isInitializing: boolean;
+  isLoading: boolean;
   error: string | null;
-  completed: boolean;
   txHash: string | null;
-  txStatus: 'PENDING' | 'SUCCESS' | 'REJECTED' | null;
 }
 
-interface InitializeResponse {
+interface InitializeResult {
   success: boolean;
   transactionHash?: string;
   error?: string;
 }
 
 export const useInitializePlayer = () => {
-  const { useDojoStore, client } = useDojoSDK();
-  const state = useDojoStore((state) => state);
+  const { client } = useDojoSDK();
   const { account } = useAccount();
   const { status } = useStarknetConnect();
   const { refetch: refetchPlayer } = usePlayer();
   
-  // Store actions
   const { 
     setError,
     setGamePhase,
     setActionInProgress,
-    setLastAction
+    setLastTransaction,
+    actionInProgress
   } = useAppStore();
 
-  // Local state
-  const [initState, setInitState] = useState<InitializeState>({
-    isInitializing: false,
+  const [state, setState] = useState<InitializeState>({
+    isLoading: false,
     error: null,
-    completed: false,
-    txHash: null,
-    txStatus: null
+    txHash: null
   });
-  
-  // Tracking if we're currently initializing
-  const [isInitializing, setIsInitializing] = useState(false);
-  
-  /**
-   * Initialize player - first step in the process
-   */
-  const initializePlayer = useCallback(async (): Promise<InitializeResponse> => {
-    // Prevent multiple executions
-    if (isInitializing) {
+
+  const initializePlayer = useCallback(async (): Promise<InitializeResult> => {
+    if (state.isLoading) {
       return { success: false, error: "Already initializing" };
     }
-    
-    setIsInitializing(true);
-    setActionInProgress(true);
-    setLastAction("Initializing player...");
-    
-    // Validation: Check if wallet is connected
-    if (status !== "connected") {
+
+    // Validate connection
+    if (status !== "connected" || !account) {
       const error = "Wallet not connected. Please connect your wallet first.";
-      setInitState(prev => ({ ...prev, error }));
+      setState(prev => ({ ...prev, error }));
       setError(error);
-      setActionInProgress(false);
-      setIsInitializing(false);
       return { success: false, error };
     }
 
-    // Validation: Check if account exists
-    if (!account) {
-      const error = "No account found. Please connect your wallet.";
-      setInitState(prev => ({ ...prev, error }));
-      setError(error);
-      setActionInProgress(false);
-      setIsInitializing(false);
-      return { success: false, error };
-    }
-
-    const transactionId = uuidv4();
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    setActionInProgress(true);
+    setError(null);
+    setGamePhase(GamePhase.INITIALIZING);
 
     try {
-      // Start initialization
-      setInitState(prev => ({ 
-        ...prev, 
-        isInitializing: true, 
-        error: null,
-        txStatus: 'PENDING'
-      }));
-      
-      // Clear any previous errors
-      setError(null);
-      setGamePhase(GamePhase.INITIALIZING);
-
       console.log("🎮 Initializing player...");
-      setLastAction("Initializing new player...");
+      
+      const tx = await client.actions.initializePlayer(account as Account);
+      
+      if (!tx?.transaction_hash) {
+        throw new Error("No transaction hash received");
+      }
 
-      // Execute initialize player transaction
-      console.log("📤 Executing initialize player transaction...");
-      const initTx = await client.actions.initializePlayer(account as Account);
+      setState(prev => ({ ...prev, txHash: tx.transaction_hash }));
+      setLastTransaction(tx.transaction_hash);
+
+      // Wait for transaction processing
+      console.log("⏳ Processing transaction...");
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      console.log("📥 Initialize transaction response:", initTx);
+      // Refetch player data
+      console.log("🔄 Refetching player data...");
+      await refetchPlayer();
       
-      if (initTx?.transaction_hash) {
-        setInitState(prev => ({ 
-          ...prev, 
-          txHash: initTx.transaction_hash
-        }));
-      }
+      console.log("✅ Player initialized successfully!");
       
-      if (initTx && initTx.code === "SUCCESS") {
-        console.log("✅ Player initialized successfully!");
-        
-        setInitState(prev => ({ 
-          ...prev, 
-          completed: true,
-          isInitializing: false,
-          txStatus: 'SUCCESS'
-        }));
-        
-        // Wait for initialization transaction to be processed
-        console.log("⏳ Waiting for initialization transaction...");
-        setLastAction("Processing initialization...");
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Refetch player data
-        console.log("🔄 Refetching player data after initialization...");
-        await refetchPlayer();
-        
-        // Confirm transaction in store
-        state.confirmTransaction(transactionId);
-        
-        setActionInProgress(false);
-        setLastAction("Player initialized");
-        setIsInitializing(false);
-        
-        return { 
-          success: true,
-          transactionHash: initTx.transaction_hash 
-        };
-      } else {
-        throw new Error("Initialize transaction failed with code: " + initTx?.code);
-      }
+      setState(prev => ({ ...prev, isLoading: false }));
+      setActionInProgress(false);
+      
+      return { 
+        success: true, 
+        transactionHash: tx.transaction_hash 
+      };
 
     } catch (error) {
       const errorMessage = error instanceof Error 
         ? error.message 
-        : "Failed to initialize player. Please try again.";
+        : "Failed to initialize player";
       
-      console.error("❌ Error initializing player:", error);
+      console.error("❌ Initialization failed:", error);
       
-      // Revert optimistic update if applicable
-      state.revertOptimisticUpdate(transactionId);
-      
-      // Update states
-      setInitState(prev => ({ 
-        ...prev, 
-        error: errorMessage,
-        isInitializing: false,
-        txStatus: 'REJECTED'
-      }));
-      
+      setState(prev => ({ ...prev, error: errorMessage, isLoading: false }));
       setError(errorMessage);
       setGamePhase(GamePhase.UNINITIALIZED);
       setActionInProgress(false);
-      setLastAction("Initialization failed");
-      setIsInitializing(false);
       
       return { success: false, error: errorMessage };
     }
   }, [
-    status, 
-    account, 
-    refetchPlayer, 
-    isInitializing, 
-    state, 
+    state.isLoading,
+    status,
+    account,
     client,
+    refetchPlayer,
     setError,
     setGamePhase,
     setActionInProgress,
-    setLastAction
-  ]); 
+    setLastTransaction
+  ]);
 
-  /**
-   * Reset initialization state
-   */
-  const resetInitializer = useCallback(() => {
-    console.log("🔄 Resetting initializer state...");
-    setIsInitializing(false);
-    setInitState({
-      isInitializing: false,
-      error: null,
-      completed: false,
-      txHash: null,
-      txStatus: null
-    });
-    
-    // Reset store states
+  const reset = useCallback(() => {
+    setState({ isLoading: false, error: null, txHash: null });
     setError(null);
     setActionInProgress(false);
-    setLastAction(null);
-  }, [setError, setActionInProgress, setLastAction]);
-
-  // Get current store state for return values
-  const currentStoreState = useAppStore();
+  }, [setError, setActionInProgress]);
 
   return {
-    // State
-    isInitializing: initState.isInitializing,
-    error: initState.error,
-    completed: initState.completed,
-    txHash: initState.txHash,
-    txStatus: initState.txStatus,
+    isLoading: state.isLoading,
+    error: state.error,
+    txHash: state.txHash,
     isConnected: status === "connected",
-    actionInProgress: currentStoreState.actionInProgress,
-    lastAction: currentStoreState.lastAction,
-    
-    // Actions
+    actionInProgress,
     initializePlayer,
-    resetInitializer
+    reset
   };
 };

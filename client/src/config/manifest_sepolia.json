@@ -1,8 +1,8 @@
 {
   "world": {
     "class_hash": "0x4c60dc46a8ca8bb47675b7b914053cef769afbf0e340523187336b72bd71d1f",
-    "address": "0x212a371cbe6811255c517af1112db3882068ed8c0e1051ee7e883225d166d79",
-    "seed": "kaadugame3",
+    "address": "0x6e338c91323a845075df5579d05fca3e07bff29129102e66085a49fcb4f1e41",
+    "seed": "kaadugame221",
     "name": "Kaadu Game",
     "entrypoints": [
       "uuid",
@@ -1328,8 +1328,8 @@
   },
   "contracts": [
     {
-      "address": "0x41d697efb96370de30b1c43815867e834cdb8ad13bb588b40a4139f4a404348",
-      "class_hash": "0x7e7e37676dd01e8c57f1ee0a35237523222ebe575f3da06010a94506fe8c3df",
+      "address": "0x3782e321a749a60101d575619f14a6e0b2a0cc7c287cb0af7137b607ee00079",
+      "class_hash": "0x5fabe4a99eb95c8b0098e890109886f29d9ae33347fbed97b895c43b8a34a23",
       "abi": [
         {
           "type": "impl",
@@ -1413,15 +1413,11 @@
             },
             {
               "type": "function",
-              "name": "interact_with_shrine",
+              "name": "take_damage",
               "inputs": [
                 {
-                  "name": "shrine_id",
-                  "type": "core::felt252"
-                },
-                {
-                  "name": "burn_steps",
-                  "type": "core::integer::u64"
+                  "name": "damage",
+                  "type": "core::integer::u32"
                 }
               ],
               "outputs": [],
@@ -1433,7 +1429,11 @@
               "inputs": [
                 {
                   "name": "gatekeeper_id",
-                  "type": "core::felt252"
+                  "type": "core::integer::u64"
+                },
+                {
+                  "name": "damage",
+                  "type": "core::integer::u64"
                 }
               ],
               "outputs": [],
@@ -1441,19 +1441,19 @@
             },
             {
               "type": "function",
-              "name": "get_encounter",
+              "name": "interact_with_shrine",
               "inputs": [
                 {
-                  "name": "player",
-                  "type": "core::starknet::contract_address::ContractAddress"
-                }
-              ],
-              "outputs": [
+                  "name": "shrine_id",
+                  "type": "core::integer::u64"
+                },
                 {
-                  "type": "(core::integer::u8, core::felt252)"
+                  "name": "burn_steps",
+                  "type": "core::integer::u64"
                 }
               ],
-              "state_mutability": "view"
+              "outputs": [],
+              "state_mutability": "external"
             }
           ]
         },
@@ -1579,20 +1579,15 @@
         "initialize_player",
         "spawn",
         "step_forward",
-        "interact_with_shrine",
+        "take_damage",
         "attack_gatekeeper",
+        "interact_with_shrine",
         "upgrade"
       ]
     }
   ],
   "libraries": [],
   "models": [
-    {
-      "members": [],
-      "class_hash": "0x2fa58118dba621fcf28bbad9550fb782a9cfad2c031413513f95d9123d3b1a7",
-      "tag": "kaadugame-CurrentEncounter",
-      "selector": "0x7cf7c46951b7f04a5ac97c264ddafc680116c590cbd7d71431b7d0b2fabaf99"
-    },
     {
       "members": [],
       "class_hash": "0x3a193795549905f1a961fcfd518540e8fe64602f459c0275f81d5dc5a95a416",
@@ -1645,13 +1640,7 @@
   "events": [
     {
       "members": [],
-      "class_hash": "0x3c675e8ca594346d4be91b7fad41487516856df5715fa32f9f8e01622582b69",
-      "tag": "kaadugame-EncounterFound",
-      "selector": "0x196b8af3097817f7ab27c71dbc4d95d07d913a4fe9d7e727a11fceb96e5562d"
-    },
-    {
-      "members": [],
-      "class_hash": "0x34a9f179cb8f630aaaf3bf65afda81ac2f7491650ce0d7913d3d0fdff3deba8",
+      "class_hash": "0x1399883ef4021535d06ac1d1167fd0a033a78d6193dc75038fa696725137f2",
       "tag": "kaadugame-GatekeeperBattle",
       "selector": "0x2b921bfcb56149b35897acda5dcc361f9b79be971b359ecab49b5ef363e036d"
     },
@@ -1675,7 +1664,7 @@
     },
     {
       "members": [],
-      "class_hash": "0x4bb6ac4f7eee2963486eddf9fdfb4937ac800cdb85ecd025d785f8d37c1f3b7",
+      "class_hash": "0x379ff53ebd1b311384cfbd22f3833fccf285e156b82a3e9cbdae5e4403a4927",
       "tag": "kaadugame-ShrineInteraction",
       "selector": "0x7a3a66cd694769919653486468921822c67f9df98feaf0ecf2543b5ea6dd1be"
     },
@@ -1687,7 +1676,7 @@
     },
     {
       "members": [],
-      "class_hash": "0x34de32c597850bf5529dbf5c90f10335db50f2b1c7bc54d401c14e1e8145fe6",
+      "class_hash": "0x5e9568673c9dc4b9ef305c8253ea2f2aa335fd20e6e253891dacdd7dce86a87",
       "tag": "kaadugame-TrapTriggered",
       "selector": "0x4c0d1297694a6e4c69383b9ccc6f8054684596d835bb1b6a19694da8682a695"
     }

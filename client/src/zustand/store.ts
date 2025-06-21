@@ -7,11 +7,9 @@ import {
   Health,
   Inventory,
   OverloadState,
-  CurrentEncounter,
   Shrine,
   Gatekeeper,
   StepTaken,
-  EncounterFound,
   GatekeeperBattle,
   ShrineInteraction,
   PlayerDeath,
@@ -24,45 +22,36 @@ import { BigNumberish } from "starknet";
 // Game state enums
 enum GamePhase {
   UNINITIALIZED = "uninitialized",
-  INITIALIZING = "initializing",
-  SPAWNING = "spawning",
-  PLAYING = "playing",
-  ENCOUNTER = "encounter",
+  INITIALIZING = "initializing", 
+  SPAWNED = "spawned",
+  WALKING = "walking",
+  AT_SHRINE = "at_shrine",
+  FIGHTING_GATEKEEPER = "fighting_gatekeeper",
+  OVERLOADED = "overloaded",
   DEAD = "dead",
-  OVERLOAD = "overload",
-}
-
-enum EncounterType {
-  NONE = 0,
-  GATEKEEPER = 1,
-  SHRINE = 2,
-  TRAP = 3,
 }
 
 // Define application state interface
 interface AppState {
-  // Core player data
+  // Core player data (from blockchain)
   player: Player | null;
-  position: Position | null;
+  position: Position | null; 
   stepCount: StepCount | null;
   health: Health | null;
   inventory: Inventory | null;
   overloadState: OverloadState | null;
-  currentEncounter: CurrentEncounter | null;
 
-  // World entities (cached)
+  // World entities (cached from blockchain queries)
   shrines: Map<string, Shrine>;
   gatekeepers: Map<string, Gatekeeper>;
 
-  // Game state management
+  // Derived game state
   gamePhase: GamePhase;
   isPlayerInitialized: boolean;
-  canTakeStep: boolean;
 
-  // Event history (limited for performance)
-  eventHistory: {
+  // Recent event history (for UI feedback and animations)
+  recentEvents: {
     stepsTaken: StepTaken[];
-    encountersFound: EncounterFound[];
     gatekeeperBattles: GatekeeperBattle[];
     shrineInteractions: ShrineInteraction[];
     playerDeaths: PlayerDeath[];
@@ -74,98 +63,118 @@ interface AppState {
   // UI/UX state
   isLoading: boolean;
   error: string | null;
-  lastAction: string | null;
+  lastTransaction: string | null;
   actionInProgress: boolean;
+  connectionStatus: "connected" | "connecting" | "disconnected";
 
-  // Statistics (derived from events)
-  stats: {
-    totalSteps: number;
+  // Game statistics (derived from player data)
+  gameStats: {
+    currentSteps: number;
     totalEncounters: number;
-    gatekeepersDefeated: number;
-    shrinesVisited: number;
-    trapsTriggered: number;
+    gatekeeperKills: number;
     totalDeaths: number;
+    trapsTriggered: number;
+    cosmeticsUnlocked: number;
+    currentEgo: number;
+    isGreedMarked: boolean;
   };
 }
 
 // Define actions interface
 interface AppActions {
-  // Core player management
-  initializePlayer: (player: Player) => void;
-  updatePlayer: (updates: Partial<Player>) => void;
+  // Core state setters (from blockchain data)
+  setPlayer: (player: Player | null) => void;
   setPosition: (position: Position | null) => void;
   setStepCount: (stepCount: StepCount | null) => void;
   setHealth: (health: Health | null) => void;
-  updateHealth: (current: number, max?: number) => void;
   setInventory: (inventory: Inventory | null) => void;
-  addToInventory: (cosmetics?: number[], blessings?: number[]) => void;
   setOverloadState: (overloadState: OverloadState | null) => void;
-  setCurrentEncounter: (encounter: CurrentEncounter | null) => void;
 
   // World entity management
   setShrines: (shrines: Shrine[]) => void;
-  addShrine: (shrine: Shrine) => void;
-  updateShrine: (shrineId: string, updates: Partial<Shrine>) => void;
-  getShrine: (shrineId: string) => Shrine | undefined;
-
+  updateShrine: (shrine: Shrine) => void;
   setGatekeepers: (gatekeepers: Gatekeeper[]) => void;
-  addGatekeeper: (gatekeeper: Gatekeeper) => void;
-  updateGatekeeper: (
-    gatekeeperId: string,
-    updates: Partial<Gatekeeper>
-  ) => void;
-  getGatekeeper: (gatekeeperId: string) => Gatekeeper | undefined;
+  updateGatekeeper: (gatekeeper: Gatekeeper) => void;
 
-  // Game state actions
+  // Game state management
   setGamePhase: (phase: GamePhase) => void;
-  setCanTakeStep: (canStep: boolean) => void;
   setPlayerInitialized: (initialized: boolean) => void;
 
-  // Event management with automatic stats update
+  // Event handling (for UI feedback)
   addStepTaken: (event: StepTaken) => void;
-  addEncounterFound: (event: EncounterFound) => void;
   addGatekeeperBattle: (event: GatekeeperBattle) => void;
   addShrineInteraction: (event: ShrineInteraction) => void;
   addPlayerDeath: (event: PlayerDeath) => void;
   addOverloadTrigger: (event: OverloadTriggered) => void;
   addTrapTrigger: (event: TrapTriggered) => void;
   addHealthDamage: (event: HealthDamage) => void;
-  clearEventHistory: () => void;
+  clearRecentEvents: () => void;
 
-  // UI/UX actions
+  // UI actions
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setLastAction: (action: string | null) => void;
+  setLastTransaction: (txHash: string | null) => void;
   setActionInProgress: (inProgress: boolean) => void;
+  setConnectionStatus: (status: "connected" | "connecting" | "disconnected") => void;
 
   // Game lifecycle
-  startNewGame: () => void;
+  initializeGame: () => void;
   respawnPlayer: () => void;
   resetGame: () => void;
-  resetStore: () => void;
 
   // Utility getters
-  isInEncounter: () => boolean;
-  getCurrentEncounterType: () => BigNumberish;
-  canInteractWithShrine: (shrineId: string) => boolean;
-  canAttackGatekeeper: (gatekeeperId: string) => boolean;
+  canTakeStep: () => boolean;
+  canInteractWithShrine: () => boolean;
+  canAttackGatekeeper: () => boolean;
+  getShrineAtPosition: (position: number) => Shrine | null;
+  getGatekeeperAtPosition: (position: number) => Gatekeeper | null;
+  isOverloaded: () => boolean;
+  getPlayerEgo: () => number;
 }
 
 // Combine state and actions
 type AppStore = AppState & AppActions;
 
-// Helper function to update stats from events
-const updateStats = (state: AppState): AppState["stats"] => {
+// Helper to update game stats from player data
+const updateGameStats = (player: Player | null): AppState["gameStats"] => {
+  if (!player) {
+    return {
+      currentSteps: 0,
+      totalEncounters: 0,
+      gatekeeperKills: 0,
+      totalDeaths: 0,
+      trapsTriggered: 0,
+      cosmeticsUnlocked: 0,
+      currentEgo: 0,
+      isGreedMarked: false,
+    };
+  }
+
   return {
-    totalSteps: state.eventHistory.stepsTaken.length,
-    totalEncounters: state.eventHistory.encountersFound.length,
-    gatekeepersDefeated: state.eventHistory.gatekeeperBattles.filter(
-      (b) => b.gatekeeper_defeated
-    ).length,
-    shrinesVisited: state.eventHistory.shrineInteractions.length,
-    trapsTriggered: state.eventHistory.trapTriggers.length,
-    totalDeaths: state.eventHistory.playerDeaths.length,
+    currentSteps: Number(player.steps),
+    totalEncounters: Number(player.encounters),
+    gatekeeperKills: Number(player.gatekeeper_kills),
+    totalDeaths: Number(player.deaths),
+    trapsTriggered: Number(player.traps_triggered),
+    cosmeticsUnlocked: Number(player.cosmetics_unlocked),
+    currentEgo: Number(player.ego),
+    isGreedMarked: player.greed_marked,
   };
+};
+
+// Helper to determine game phase based on state
+const determineGamePhase = (
+  player: Player | null,
+  health: Health | null,
+  overloadState: OverloadState | null
+): GamePhase => {
+  if (!player) return GamePhase.UNINITIALIZED;
+  
+  if (health && Number(health.current) <= 0) return GamePhase.DEAD;
+  
+  if (overloadState?.is_active) return GamePhase.OVERLOADED;
+  
+  return GamePhase.WALKING;
 };
 
 // Initial state
@@ -177,7 +186,6 @@ const initialState: AppState = {
   health: null,
   inventory: null,
   overloadState: null,
-  currentEncounter: null,
 
   // World entities
   shrines: new Map(),
@@ -186,12 +194,10 @@ const initialState: AppState = {
   // Game state
   gamePhase: GamePhase.UNINITIALIZED,
   isPlayerInitialized: false,
-  canTakeStep: false,
 
-  // Events
-  eventHistory: {
+  // Events (limited recent history for UI feedback)
+  recentEvents: {
     stepsTaken: [],
-    encountersFound: [],
     gatekeeperBattles: [],
     shrineInteractions: [],
     playerDeaths: [],
@@ -203,22 +209,25 @@ const initialState: AppState = {
   // UI state
   isLoading: false,
   error: null,
-  lastAction: null,
+  lastTransaction: null,
   actionInProgress: false,
+  connectionStatus: "disconnected",
 
   // Stats
-  stats: {
-    totalSteps: 0,
+  gameStats: {
+    currentSteps: 0,
     totalEncounters: 0,
-    gatekeepersDefeated: 0,
-    shrinesVisited: 0,
-    trapsTriggered: 0,
+    gatekeeperKills: 0,
     totalDeaths: 0,
+    trapsTriggered: 0,
+    cosmeticsUnlocked: 0,
+    currentEgo: 0,
+    isGreedMarked: false,
   },
 };
 
-// Maximum events to keep in history (for performance)
-const MAX_EVENTS = 50;
+// Maximum recent events to keep (for performance)
+const MAX_RECENT_EVENTS = 20;
 
 // Create the store
 const useAppStore = create<AppStore>()(
@@ -227,247 +236,203 @@ const useAppStore = create<AppStore>()(
       // Initial state
       ...initialState,
 
-      // Core player management
-      initializePlayer: (player) =>
-        set({
-          player,
-          isPlayerInitialized: true,
-          gamePhase: GamePhase.SPAWNING,
+      // Core state setters
+      setPlayer: (player) =>
+        set((state) => {
+          const gameStats = updateGameStats(player);
+          const gamePhase = determineGamePhase(
+            player,
+            state.health,
+            state.overloadState
+          );
+
+          return {
+            player,
+            gameStats,
+            gamePhase,
+            isPlayerInitialized: player !== null,
+          };
         }),
 
-      updatePlayer: (updates) =>
-        set((state) => ({
-          player: state.player ? { ...state.player, ...updates } : null,
-        })),
+      setPosition: (position) =>
+        set((state) => {
+          const gamePhase = determineGamePhase(
+            state.player,
+            state.health,
+            state.overloadState
+          );
 
-      setPosition: (position) => set({ position }),
+          return { position, gamePhase };
+        }),
+
       setStepCount: (stepCount) => set({ stepCount }),
-      setHealth: (health) => set({ health }),
 
-      updateHealth: (current, max) =>
-        set((state) => ({
-          health: state.health
-            ? {
-                ...state.health,
-                current,
-                max: max ?? state.health.max,
-              }
-            : null,
-        })),
+      setHealth: (health) =>
+        set((state) => {
+          const gamePhase = determineGamePhase(
+            state.player,
+            health,
+            state.overloadState
+          );
+          return { health, gamePhase };
+        }),
 
       setInventory: (inventory) => set({ inventory }),
 
-      addToInventory: (cosmetics = [], blessings = []) =>
-        set((state) => ({
-          inventory: state.inventory
-            ? {
-                ...state.inventory,
-                cosmetics: [...state.inventory.cosmetics, ...cosmetics],
-                blessings: [...state.inventory.blessings, ...blessings],
-              }
-            : null,
-        })),
-
       setOverloadState: (overloadState) =>
-        set({
-          overloadState,
-          gamePhase: overloadState?.is_active
-            ? GamePhase.OVERLOAD
-            : GamePhase.PLAYING,
-        }),
-
-      setCurrentEncounter: (encounter) =>
-        set({
-          currentEncounter: encounter,
-          gamePhase: encounter ? GamePhase.ENCOUNTER : GamePhase.PLAYING,
+        set((state) => {
+          const gamePhase = determineGamePhase(
+            state.player,
+            state.health,
+            overloadState
+          );
+          return { overloadState, gamePhase };
         }),
 
       // World entity management
       setShrines: (shrines) =>
-        set({
-          shrines: new Map(shrines.map((s) => [s.shrine_id.toString(), s])),
+        set((state) => {
+          const shrineMap = new Map(
+            shrines.map((s) => [s.shrine_id.toString(), s])
+          );
+          const gamePhase = determineGamePhase(
+            state.player,
+            state.health,
+            state.overloadState
+          );
+
+          return { shrines: shrineMap, gamePhase };
         }),
 
-      addShrine: (shrine) =>
+      updateShrine: (shrine) =>
         set((state) => {
           const newShrines = new Map(state.shrines);
           newShrines.set(shrine.shrine_id.toString(), shrine);
-          return { shrines: newShrines };
-        }),
+          
+          const gamePhase = determineGamePhase(
+            state.player,
+            state.health,
+            state.overloadState
+          );
 
-      updateShrine: (shrineId, updates) =>
-        set((state) => {
-          const newShrines = new Map(state.shrines);
-          const existing = newShrines.get(shrineId);
-          if (existing) {
-            newShrines.set(shrineId, { ...existing, ...updates });
-          }
-          return { shrines: newShrines };
+          return { shrines: newShrines, gamePhase };
         }),
-
-      getShrine: (shrineId) => get().shrines.get(shrineId),
 
       setGatekeepers: (gatekeepers) =>
-        set({
-          gatekeepers: new Map(
+        set((state) => {
+          const gatekeeperMap = new Map(
             gatekeepers.map((g) => [g.gatekeeper_id.toString(), g])
-          ),
+          );
+          const gamePhase = determineGamePhase(
+            state.player,
+            state.health,
+            state.overloadState
+          );
+
+          return { gatekeepers: gatekeeperMap, gamePhase };
         }),
 
-      addGatekeeper: (gatekeeper) =>
+      updateGatekeeper: (gatekeeper) =>
         set((state) => {
           const newGatekeepers = new Map(state.gatekeepers);
           newGatekeepers.set(gatekeeper.gatekeeper_id.toString(), gatekeeper);
-          return { gatekeepers: newGatekeepers };
+          console.log("Printing state for updateGatekeeper",newGatekeepers);
+          const gamePhase = determineGamePhase(
+            state.player,
+            state.health,
+            state.overloadState
+          );
+
+          return { gatekeepers: newGatekeepers, gamePhase };
         }),
 
-      updateGatekeeper: (gatekeeperId, updates) =>
-        set((state) => {
-          const newGatekeepers = new Map(state.gatekeepers);
-          const existing = newGatekeepers.get(gatekeeperId);
-          if (existing) {
-            newGatekeepers.set(gatekeeperId, { ...existing, ...updates });
-          }
-          return { gatekeepers: newGatekeepers };
-        }),
-
-      getGatekeeper: (gatekeeperId) => get().gatekeepers.get(gatekeeperId),
-
-      // Game state actions
+      // Game state management
       setGamePhase: (gamePhase) => set({ gamePhase }),
-      setCanTakeStep: (canTakeStep) => set({ canTakeStep }),
-      setPlayerInitialized: (isPlayerInitialized) =>
-        set({ isPlayerInitialized }),
+      setPlayerInitialized: (isPlayerInitialized) => set({ isPlayerInitialized }),
 
-      // Event management with auto-stats update
+      // Event handling (keep recent events for UI feedback)
       addStepTaken: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
+        set((state) => ({
+          recentEvents: {
+            ...state.recentEvents,
             stepsTaken: [
-              ...state.eventHistory.stepsTaken.slice(-MAX_EVENTS + 1),
+              ...state.recentEvents.stepsTaken.slice(-MAX_RECENT_EVENTS + 1),
               event,
             ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-            canTakeStep: true,
-          };
-        }),
-
-      addEncounterFound: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
-            encountersFound: [
-              ...state.eventHistory.encountersFound.slice(-MAX_EVENTS + 1),
-              event,
-            ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-          };
-        }),
+          },
+        })),
 
       addGatekeeperBattle: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
+        set((state) => ({
+          recentEvents: {
+            ...state.recentEvents,
             gatekeeperBattles: [
-              ...state.eventHistory.gatekeeperBattles.slice(-MAX_EVENTS + 1),
+              ...state.recentEvents.gatekeeperBattles.slice(-MAX_RECENT_EVENTS + 1),
               event,
             ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-          };
-        }),
+          },
+        })),
 
       addShrineInteraction: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
+        set((state) => ({
+          recentEvents: {
+            ...state.recentEvents,
             shrineInteractions: [
-              ...state.eventHistory.shrineInteractions.slice(-MAX_EVENTS + 1),
+              ...state.recentEvents.shrineInteractions.slice(-MAX_RECENT_EVENTS + 1),
               event,
             ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-          };
-        }),
+          },
+        })),
 
       addPlayerDeath: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
+        set((state) => ({
+          recentEvents: {
+            ...state.recentEvents,
             playerDeaths: [
-              ...state.eventHistory.playerDeaths.slice(-MAX_EVENTS + 1),
+              ...state.recentEvents.playerDeaths.slice(-MAX_RECENT_EVENTS + 1),
               event,
             ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-            gamePhase: GamePhase.DEAD,
-            currentEncounter: null,
-          };
-        }),
+          },
+          gamePhase: GamePhase.DEAD,
+        })),
 
       addOverloadTrigger: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
+        set((state) => ({
+          recentEvents: {
+            ...state.recentEvents,
             overloadTriggers: [
-              ...state.eventHistory.overloadTriggers.slice(-MAX_EVENTS + 1),
+              ...state.recentEvents.overloadTriggers.slice(-MAX_RECENT_EVENTS + 1),
               event,
             ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-          };
-        }),
+          },
+        })),
 
       addTrapTrigger: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
+        set((state) => ({
+          recentEvents: {
+            ...state.recentEvents,
             trapTriggers: [
-              ...state.eventHistory.trapTriggers.slice(-MAX_EVENTS + 1),
+              ...state.recentEvents.trapTriggers.slice(-MAX_RECENT_EVENTS + 1),
               event,
             ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-          };
-        }),
+          },
+        })),
 
       addHealthDamage: (event) =>
-        set((state) => {
-          const newEvents = {
-            ...state.eventHistory,
+        set((state) => ({
+          recentEvents: {
+            ...state.recentEvents,
             healthDamage: [
-              ...state.eventHistory.healthDamage.slice(-MAX_EVENTS + 1),
+              ...state.recentEvents.healthDamage.slice(-MAX_RECENT_EVENTS + 1),
               event,
             ],
-          };
-          return {
-            eventHistory: newEvents,
-            stats: updateStats({ ...state, eventHistory: newEvents }),
-          };
-        }),
+          },
+        })),
 
-      clearEventHistory: () =>
-        set((state) => ({
-          eventHistory: {
+      clearRecentEvents: () =>
+        set({
+          recentEvents: {
             stepsTaken: [],
-            encountersFound: [],
             gatekeeperBattles: [],
             shrineInteractions: [],
             playerDeaths: [],
@@ -475,102 +440,115 @@ const useAppStore = create<AppStore>()(
             trapTriggers: [],
             healthDamage: [],
           },
-          stats: updateStats({
-            ...state,
-            eventHistory: initialState.eventHistory,
-          }),
-        })),
+        }),
 
       // UI actions
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error }),
-      setLastAction: (lastAction) => set({ lastAction }),
+      setLastTransaction: (lastTransaction) => set({ lastTransaction }),
       setActionInProgress: (actionInProgress) => set({ actionInProgress }),
+      setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
 
       // Game lifecycle
-      startNewGame: () =>
+      initializeGame: () =>
         set({
           gamePhase: GamePhase.INITIALIZING,
-          currentEncounter: null,
-          canTakeStep: false,
           error: null,
+          isLoading: true,
         }),
 
       respawnPlayer: () =>
         set({
-          gamePhase: GamePhase.SPAWNING,
-          currentEncounter: null,
-          canTakeStep: false,
+          gamePhase: GamePhase.SPAWNED,
           error: null,
         }),
 
       resetGame: () =>
         set({
-          gamePhase: GamePhase.UNINITIALIZED,
-          isPlayerInitialized: false,
-          currentEncounter: null,
-          canTakeStep: false,
-          shrines: new Map(),
-          gatekeepers: new Map(),
-          error: null,
+          ...initialState,
+          connectionStatus: get().connectionStatus, // Keep connection status
         }),
 
-      resetStore: () => set(initialState),
-
       // Utility getters
-      isInEncounter: () => {
+      canTakeStep: () => {
         const state = get();
-        return state.currentEncounter !== null;
-      },
-
-      getCurrentEncounterType: () => {
-        const state = get();
-        return state.currentEncounter?.encounter_type || EncounterType.NONE;
-      },
-
-      canInteractWithShrine: (shrineId) => {
-        const state = get();
-        const shrine = state.shrines.get(shrineId);
         return (
-          shrine?.is_active === true && state.gamePhase === GamePhase.ENCOUNTER
+          state.gamePhase === GamePhase.WALKING &&
+          !state.actionInProgress &&
+          state.health !== null &&
+          Number(state.health.current) > 0 &&
+          !state.overloadState?.is_active
         );
       },
 
-      canAttackGatekeeper: (gatekeeperId) => {
+      canInteractWithShrine: () => {
         const state = get();
-        const gatekeeper = state.gatekeepers.get(gatekeeperId);
         return (
-          (gatekeeper &&
-            Number(gatekeeper.health) > 0 &&
-            state.gamePhase === GamePhase.ENCOUNTER) ||
-          false
+          !state.actionInProgress &&
+          state.health !== null &&
+          Number(state.health.current) > 0
         );
+      },
+
+      canAttackGatekeeper: () => {
+        const state = get();
+        return (
+          !state.actionInProgress &&
+          state.health !== null &&
+          Number(state.health.current) > 0
+        );
+      },
+
+      getShrineAtPosition: (position: number) => {
+        const state = get();
+        for (const [id, shrine] of state.shrines) {
+          if (Number(shrine.position) === position && shrine.is_active) {
+            return shrine;
+          }
+        }
+        return null;
+      },
+
+      getGatekeeperAtPosition: (position: number) => {
+        const state = get();
+        console.log("Printing state for getGatekeeperAtPosition",state.gatekeepers);
+        
+        for (const [id, gatekeeper] of state.gatekeepers) {
+          if (Number(gatekeeper.position) === position && Number(gatekeeper.health) > 0) {
+            return gatekeeper;
+          }
+        }
+        return null;
+      },
+
+      isOverloaded: () => {
+        const state = get();
+        return state.overloadState?.is_active === true;
+      },
+
+      getPlayerEgo: () => {
+        const state = get();
+        return state.player ? Number(state.player.ego) : 0;
       },
     }),
     {
       name: "kaadugame-store",
       partialize: (state) => ({
-        // Persist core player data
+        // Persist only essential data
         player: state.player,
         position: state.position,
         stepCount: state.stepCount,
         health: state.health,
         inventory: state.inventory,
         overloadState: state.overloadState,
-
-        // Persist game state
-        gamePhase: state.gamePhase,
         isPlayerInitialized: state.isPlayerInitialized,
-
-        // Persist recent stats but not full event history
-        stats: state.stats,
-
-        // Don't persist: entities (should be fetched), events (too large), UI state
+        gameStats: state.gameStats,
+        // Don't persist: entities (refetch from blockchain), events (UI only), UI state
       }),
     }
   )
 );
 
 export default useAppStore;
-export { GamePhase, EncounterType };
+export { GamePhase };
 export type { AppState, AppActions, AppStore };

@@ -38,16 +38,6 @@ pub struct Inventory {
 
 #[derive(Copy, Drop, Serde, Debug)]
 #[dojo::model]
-pub struct CurrentEncounter {
-    #[key]
-    pub player: ContractAddress,
-    pub encounter_type: u8, // 0=none, 1=gatekeeper, 2=shrine
-    pub entity_id: felt252,
-    pub position: u64,
-}
-
-#[derive(Copy, Drop, Serde, Debug)]
-#[dojo::model]
 pub struct Health {
     #[key]
     pub player: ContractAddress,
@@ -219,32 +209,6 @@ pub impl GatekeeperImpl of GatekeeperTrait {
     }
 }
 
-// ===== HELPER FUNCTIONS =====
-
-#[generate_trait]
-pub impl EntityLookupImpl of EntityLookupTrait {
-    fn find_entity_at_position(player_pos: u64) -> (u8, felt252) {
-        // Check for shrine at this position
-        let shrine_id = (player_pos + 2000).into();
-        // Check for gatekeeper at this position  
-        let gatekeeper_id = (player_pos + 3000).into();
-        
-        // Return encounter type and entity id
-        // This is a simplified lookup - in practice you'd check world state
-        if player_pos % 20 == 0 { // Every 20 steps - shrine
-            (2, shrine_id)
-        } else if player_pos % 26 == 0 { // Every 26 steps - gatekeeper
-            (1, gatekeeper_id)
-        } else {
-            (0, 0)
-        }
-    }
-
-    fn validate_spawn_distance(current_pos: u64, last_encounter_pos: u64) -> bool {
-        current_pos >= last_encounter_pos + 5
-    }
-}
-
 // ===== TESTS =====
 
 #[cfg(test)]
@@ -292,11 +256,5 @@ mod tests {
         health.take_damage(80);
         assert(health.current == 0, 'health should be zero');
         assert(health.is_dead(), 'should be dead');
-    }
-
-    #[test]
-    fn test_encounter_distance_validation() {
-        assert(EntityLookupImpl::validate_spawn_distance(30, 15), 'should allow spawn at safe distance');
-        assert(!EntityLookupImpl::validate_spawn_distance(20, 15), 'should not allow spawn too close');
     }
 }

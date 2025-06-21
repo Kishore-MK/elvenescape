@@ -1,5 +1,5 @@
 use kaadugame::models::{
-    BlessingType, CosmeticType, CurrentEncounter, EntityLookupTrait, Gatekeeper, GatekeeperTrait, 
+    BlessingType, CosmeticType, Gatekeeper, GatekeeperTrait, 
     Health, HealthTrait, Inventory, OverloadState, Player, PlayerTrait, Position, PositionTrait, 
     Shrine, StepCount,
 };
@@ -11,9 +11,9 @@ pub trait IActions<T> {
     fn initialize_player(ref self: T);
     fn spawn(ref self: T);
     fn step_forward(ref self: T);
-    fn interact_with_shrine(ref self: T, shrine_id: felt252, burn_steps: u64);
-    fn attack_gatekeeper(ref self: T, gatekeeper_id: felt252);
-    fn get_encounter(self: @T, player: ContractAddress) -> (u8, felt252);
+    fn take_damage(ref self: T, damage: u32);
+    fn attack_gatekeeper(ref self: T, gatekeeper_id: u64,damage:u64);
+    fn interact_with_shrine(ref self: T, shrine_id: u64, burn_steps: u64);
 }
 
 // dojo decorator
@@ -24,7 +24,7 @@ pub mod actions {
     use dojo::world::WorldStorage;
     use starknet::{ContractAddress, get_block_number, get_caller_address, get_block_timestamp};
     use super::{
-        BlessingType, CosmeticType, CurrentEncounter, EntityLookupTrait, Gatekeeper, GatekeeperTrait, 
+        BlessingType, CosmeticType, Gatekeeper, GatekeeperTrait, 
         Health, HealthTrait, IActions, Inventory, OverloadState, Player, PlayerTrait, Position, 
         PositionTrait, Shrine, StepCount,
     };
@@ -42,15 +42,6 @@ pub mod actions {
 
     #[derive(Copy, Drop, Serde)]
     #[dojo::event]
-    pub struct EncounterFound {
-        #[key]
-        pub player: ContractAddress,
-        pub encounter_type: u8, // 0=none, 1=gatekeeper, 2=shrine
-        pub entity_id: felt252,
-    }
-
-    #[derive(Copy, Drop, Serde)]
-    #[dojo::event]
     pub struct OverloadTriggered {
         #[key]
         pub player: ContractAddress,
@@ -63,7 +54,7 @@ pub mod actions {
         #[key]
         pub player: ContractAddress,
         pub final_position: u64,
-        pub cause: felt252, // 'trap', 'health_depletion', 'gatekeeper'
+        pub cause: felt252, // 'damage', 'trap'
     }
 
     #[derive(Copy, Drop, Serde)]
@@ -71,7 +62,7 @@ pub mod actions {
     pub struct GatekeeperBattle {
         #[key]
         pub player: ContractAddress,
-        pub gatekeeper_id: felt252,
+        pub gatekeeper_id: u64,
         pub damage_dealt: u64,
         pub gatekeeper_defeated: bool,
     }
@@ -81,7 +72,7 @@ pub mod actions {
     pub struct ShrineInteraction {
         #[key]
         pub player: ContractAddress,
-        pub shrine_id: felt252,
+        pub shrine_id: u64,
         pub steps_burned: u64,
         pub reward_received: felt252,
     }
@@ -91,7 +82,7 @@ pub mod actions {
     pub struct TrapTriggered {
         #[key]
         pub player: ContractAddress,
-        pub shrine_id: felt252,
+        pub shrine_id: u64,
     }
 
     #[derive(Copy, Drop, Serde)]
@@ -142,19 +133,12 @@ pub mod actions {
             let position = Position { player, x: 1 };
             let step_count = StepCount { player, count: 0 };
             let overload_state = OverloadState { player, is_active: false, steps_remaining: 0 };
-            let current_encounter = CurrentEncounter { 
-                player, 
-                encounter_type: 0, // 0 = none
-                entity_id: 0,
-                position: 0,
-            };
             let health = Health { player, current: 100, max: 100 };
 
             // Write session components to world
             world.write_model(@position);
             world.write_model(@step_count);
             world.write_model(@overload_state);
-            world.write_model(@current_encounter);
             world.write_model(@health);
         }
 
@@ -166,30 +150,11 @@ pub mod actions {
             let mut position: Position = world.read_model(player);
             let mut step_count: StepCount = world.read_model(player);
             let mut player_stats: Player = world.read_model(player);
-            let mut health: Health = world.read_model(player);
-            let mut current_encounter: CurrentEncounter = world.read_model(player);
+            let health: Health = world.read_model(player);
 
             // Verify player exists and is alive
             if position.x == 0 || health.is_dead() {
                 return;
-            }
-
-            // Check if player has an active encounter that hasn't been resolved
-            if current_encounter.encounter_type == 1 { // gatekeeper
-                // Player takes damage for not attacking gatekeeper
-                let damage = 40;
-                health.take_damage(damage);
-                
-                world.emit_event(@HealthDamage { 
-                    player, 
-                    damage, 
-                    current_health: health.current 
-                });
-
-                if health.is_dead() {
-                    self.handle_player_death(ref world, player, position.x, 'health_depletion');
-                    return;
-                }
             }
 
             // Update position and step count
@@ -202,138 +167,77 @@ pub mod actions {
                 self.trigger_overload(ref world, player, step_count.count);
             }
 
-            // Check for position-based encounters
-            let encounter_result = self.check_position_encounter(ref world, player, position.x, current_encounter.position);
-
-            // Update current encounter
-            current_encounter.encounter_type = encounter_result.encounter_type;
-            current_encounter.entity_id = encounter_result.entity_id;
-            if encounter_result.encounter_type != 0 {
-                current_encounter.position = position.x+15;
-            }
-
             // Write updated state
             world.write_model(@position);
             world.write_model(@step_count);
             world.write_model(@player_stats);
-            world.write_model(@health);
-            world.write_model(@current_encounter);
 
-            // Emit events
+            // Emit event
             world.emit_event(@StepTaken { 
                 player, 
                 new_position: position.x, 
                 step_count: step_count.count 
             });
-
-            if encounter_result.encounter_type != 0 {
-                world.emit_event(@EncounterFound {
-                    player,
-                    encounter_type: encounter_result.encounter_type,
-                    entity_id: encounter_result.entity_id,
-                });
-            }
         }
 
-        fn interact_with_shrine(ref self: ContractState, shrine_id: felt252, burn_steps: u64) {
+        fn take_damage(ref self: ContractState, damage: u32) {
             let mut world = self.world_default();
             let player = get_caller_address();
 
-            let mut shrine: Shrine = world.read_model(shrine_id);
-            let mut step_count: StepCount = world.read_model(player);
-            let mut player_stats: Player = world.read_model(player);
-            let mut inventory: Inventory = world.read_model(player);
-            let mut current_encounter: CurrentEncounter = world.read_model(player);
+            let mut health: Health = world.read_model(player);
             let position: Position = world.read_model(player);
 
-            // Verify shrine exists, is active, and player has current encounter with this shrine
-            if !shrine.is_active || current_encounter.encounter_type != 2 || current_encounter.entity_id != shrine_id {
+            // Verify player exists and is alive
+            if health.is_dead() {
                 return;
             }
 
-            // Check if it's a trap - instant death
-            if shrine.is_trap {
-                player_stats.mark_greed();
-                self.handle_player_death(ref world, player, position.x, 'trap');
-                
-                world.emit_event(@TrapTriggered { player, shrine_id });
-                return;
-            }
+            health.take_damage(damage);
 
-            // Verify player has enough steps
-            if step_count.count < burn_steps {
-                return;
-            }
-
-            // Burn steps
-            step_count.count -= burn_steps;
-
-            inventory.blessings.append(shrine.blessing);
-
-            // Maybe add cosmetic
-            let reward = match shrine.cosmetic {
-                Option::Some(cosmetic) => {
-                    inventory.cosmetics.append(cosmetic);
-                    cosmetic
-                },
-                Option::None => shrine.blessing,
-            };
-
-            // Deactivate shrine
-            shrine.is_active = false;
-
-            // Clear current encounter
-            current_encounter.encounter_type = 0; // none
-            current_encounter.entity_id = 0;
-            current_encounter.position = 0;
-
-            // Update state
-            world.write_model(@shrine);
-            world.write_model(@step_count);
-            world.write_model(@player_stats);
-            world.write_model(@inventory);
-            world.write_model(@current_encounter);
-
-            world.emit_event(@ShrineInteraction {
+            world.emit_event(@HealthDamage { 
                 player, 
-                shrine_id, 
-                steps_burned: burn_steps, 
-                reward_received: reward,
+                damage, 
+                current_health: health.current 
             });
+
+            if health.is_dead() {
+                self.handle_player_death(ref world, player, position.x, 'damage');
+            }
+
+            world.write_model(@health);
         }
 
-        fn attack_gatekeeper(ref self: ContractState, gatekeeper_id: felt252) {
+        fn attack_gatekeeper(ref self: ContractState, gatekeeper_id: u64,damage:u64) {
             let mut world = self.world_default();
             let player = get_caller_address();
 
-            let mut gatekeeper: Gatekeeper = world.read_model(gatekeeper_id);
-            let mut player_stats: Player = world.read_model(player);
-            let mut current_encounter: CurrentEncounter = world.read_model(player);
+            let player_stats: Player = world.read_model(player);
+                        
+            let mut gatekeeper = self.create_gatekeeper(gatekeeper_id);
+            
 
-            // Verify gatekeeper exists and player has current encounter with this gatekeeper
-            if current_encounter.encounter_type != 1 || current_encounter.entity_id != gatekeeper_id {
+            // Verify gatekeeper is alive
+            if gatekeeper.is_dead() {
                 return;
             }
-
-            // Calculate damage based on ego
-            let damage = (player_stats.ego / 10).try_into().unwrap_or(10_u64);
+ 
             gatekeeper.take_damage(damage);
 
             let gatekeeper_defeated = gatekeeper.is_dead();
 
             if gatekeeper_defeated {
-                player_stats.add_gatekeeper_kill();
-                player_stats.add_encounter();
+                // Mark gatekeeper as defeated by setting health to 0
+                // Dojo doesn't have delete_model, so we keep the defeated gatekeeper in storage
+                world.write_model(@gatekeeper);
                 
-                // Clear current encounter
-                current_encounter.encounter_type = 0; // none
-                current_encounter.entity_id = 0;
-                current_encounter.position = 0;
+                // Update player stats
+                let mut updated_player_stats = player_stats;
+                updated_player_stats.add_gatekeeper_kill();
+                world.write_model(@updated_player_stats);
+            } else {
+                // Keep gatekeeper alive in storage
+                world.write_model(@gatekeeper);
             }
-
-            world.write_model(@gatekeeper);
-            world.write_model(@player_stats);
-            world.write_model(@current_encounter);
 
             world.emit_event(@GatekeeperBattle {
                 player,
@@ -343,10 +247,78 @@ pub mod actions {
             });
         }
 
-        fn get_encounter(self: @ContractState, player: ContractAddress) -> (u8, felt252) {
-            let world = self.world_default();
-            let current_encounter: CurrentEncounter = world.read_model(player);
-            (current_encounter.encounter_type, current_encounter.entity_id)
+        fn interact_with_shrine(ref self: ContractState, shrine_id: u64, burn_steps: u64) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+
+            let mut step_count: StepCount = world.read_model(player);
+            let mut player_stats: Player = world.read_model(player);
+            let mut inventory: Inventory = world.read_model(player);
+            let health: Health = world.read_model(player);
+            let position: Position = world.read_model(player);
+
+            // Verify player is alive
+            if health.is_dead() {
+                return;
+            }
+
+            // Verify player has enough steps
+            if step_count.count < burn_steps {
+                return;
+            }
+ 
+            let mut shrine = self.create_shrine(shrine_id);
+            
+
+           
+
+            // Check if it's a trap - instant death
+            if shrine.is_trap {
+                player_stats.mark_greed();
+                world.write_model(@player_stats);
+                
+                // Mark shrine as consumed by setting is_active to false
+                shrine.is_active = false;
+                world.write_model(@shrine);
+                
+                self.handle_player_death(ref world, player, position.x, 'trap');
+                
+                world.emit_event(@TrapTriggered { player, shrine_id });
+                return;
+            }
+
+            // Burn steps
+            step_count.count -= burn_steps;
+            player_stats.steps -=burn_steps;
+            // Give rewards
+            inventory.blessings.append(shrine.blessing);
+            
+            let reward = match shrine.cosmetic {
+                Option::Some(cosmetic) => {
+                    inventory.cosmetics.append(cosmetic);
+                    cosmetic
+                },
+                Option::None => shrine.blessing,
+            };
+
+            // Update player stats
+            player_stats.add_encounter();
+
+            // Mark shrine as consumed by setting is_active to false
+            shrine.is_active = false;
+
+            // Update state
+            world.write_model(@step_count);
+            world.write_model(@player_stats);
+            world.write_model(@inventory);
+            world.write_model(@shrine);
+
+            world.emit_event(@ShrineInteraction {
+                player, 
+                shrine_id, 
+                steps_burned: burn_steps, 
+                reward_received: reward,
+            });
         }
     }
 
@@ -371,72 +343,36 @@ pub mod actions {
             world.emit_event(@OverloadTriggered { player, step_count });
         }
 
-        fn check_position_encounter(
-            self: @ContractState, 
-            ref world: WorldStorage, 
-            player: ContractAddress, 
-            player_pos: u64,
-            last_encounter_pos: u64,
-        ) -> EncounterResult {
-            // Check if we should spawn a new entity at this position
-            let spawn_pos = player_pos + 15;
+        fn create_gatekeeper(self: @ContractState, gatekeeper_id: u64) -> Gatekeeper {
+            let gatekeeper_id_felt: felt252 = gatekeeper_id.into();
             
-            // Only spawn if we're at the right distance from last encounter
-            if !EntityLookupTrait::validate_spawn_distance(spawn_pos, last_encounter_pos) {
-                return EncounterResult { encounter_type: 0, entity_id: 0 };
-            }
-
-            // Determine what type of entity to spawn based on position
-            let roll = get_block_timestamp() % 100;
-            
-            if roll < 20 { // 20% chance for shrine
-                let shrine_id = self.spawn_shrine(ref world, spawn_pos);
-                EncounterResult { encounter_type: 2, entity_id: shrine_id } // 2 = shrine
-            } else if roll < 70 { // 50% chance for gatekeeper
-                let gatekeeper_id = self.spawn_gatekeeper(ref world, spawn_pos);
-                EncounterResult { encounter_type: 1, entity_id: gatekeeper_id } // 1 = gatekeeper
-            } else {
-                EncounterResult { encounter_type: 0, entity_id: 0 } // 0 = none
+            // Generate stats based on ID for consistency
+            let base_health = 100;
+            Gatekeeper {
+                gatekeeper_id: gatekeeper_id_felt,
+                strength: 40,
+                health: base_health,
+                max_health: base_health,
+                spawn_step: gatekeeper_id,
+                position: gatekeeper_id,
             }
         }
 
-        fn spawn_shrine(self: @ContractState, ref world: WorldStorage, position: u64) -> felt252 {
-            let shrine_id = position + 2000;
+        fn create_shrine(self: @ContractState, shrine_id: u64) -> Shrine {
             let shrine_id_felt: felt252 = shrine_id.into();
 
-            // 70% chance of trap
-            let trap_roll = get_block_timestamp() % 100;
-            let is_trap = trap_roll < 70;
+            // Generate trap chance based on ID for consistency
+            let trap_roll = shrine_id % 100;
+            let is_trap = trap_roll < 70; // 70% chance of trap
 
-            let shrine = Shrine {
+            Shrine {
                 shrine_id: shrine_id_felt,
                 blessing: BlessingType::Luck.into(),
                 cosmetic: if is_trap { Option::None } else { Option::Some(CosmeticType::Hat.into()) },
                 is_trap,
                 is_active: true,
-                position,
-            };
-
-            world.write_model(@shrine);
-            shrine_id_felt
-        }
-
-        fn spawn_gatekeeper(self: @ContractState, ref world: WorldStorage, position: u64) -> felt252 {
-            let gatekeeper_id = position + 3000;
-            let gatekeeper_id_felt: felt252 = gatekeeper_id.into();
-            
-            let base_health = 80 + (position % 40);
-            let gatekeeper = Gatekeeper {
-                gatekeeper_id: gatekeeper_id_felt,
-                strength: 75 + (position % 50),
-                health: base_health,
-                max_health: base_health,
-                spawn_step: position,
-                position,
-            };
-
-            world.write_model(@gatekeeper);
-            gatekeeper_id_felt
+                position: shrine_id,
+            }
         }
  
         fn handle_player_death(
@@ -447,20 +383,13 @@ pub mod actions {
             cause: felt252,
         ) {
             let mut player_stats: Player = world.read_model(player);
-            let mut current_encounter: CurrentEncounter = world.read_model(player);
             let mut health: Health = world.read_model(player);
             
             health.current = 0;
             player_stats.add_death();
             
-            // Clear any active encounter
-            current_encounter.encounter_type = 0; // none
-            current_encounter.entity_id = 0;
-            current_encounter.position = 0;
-            
             world.write_model(@health);
             world.write_model(@player_stats);
-            world.write_model(@current_encounter);
 
             world.emit_event(@PlayerDeath { 
                 player, 
@@ -468,12 +397,5 @@ pub mod actions {
                 cause 
             });
         }
-    }
-
-    // Helper struct for encounter results
-    #[derive(Copy, Drop)]
-    struct EncounterResult {
-        encounter_type: u8,
-        entity_id: felt252,
     }
 }

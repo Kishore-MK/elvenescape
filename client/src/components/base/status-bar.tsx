@@ -21,43 +21,35 @@ export function StatusBar() {
     player, 
     isLoading: playerLoading, 
     error: playerError, 
-    refetch: refetchPlayer,
-    gamePhase: playerGamePhase,
-    isPlayerInitialized
+    refetch: refetchPlayer
   } = usePlayer();
 
   const {
-    initializePlayer,
-    isInitializing,
+    isLoading: isInitializing,
     error: initError,
-    completed: initCompleted,
     txHash: initTxHash,
-    txStatus: initTxStatus,
     isConnected: initIsConnected,
     actionInProgress: initActionInProgress,
-    lastAction: initLastAction,
-    resetInitializer
+    initializePlayer,
+    reset: resetInitializer
   } = useInitializePlayer();
 
   const {
-    spawnPlayer,
-    checkAndInitializePlayer,
-    resetSpawner,
-    isSpawning,
+    status: spawnStatus,
     error: spawnError,
-    completed: spawnCompleted,
-    currentStep,
     txHash: spawnTxHash,
-    txStatus: spawnTxStatus,
+    isProcessing: isSpawning,
     isConnected: spawnIsConnected,
     playerExists,
     gamePhase: spawnGamePhase,
     actionInProgress: spawnActionInProgress,
-    lastAction: spawnLastAction
+    spawnPlayer,
+    checkAndInitialize: checkAndInitializePlayer,
+    reset: resetSpawner
   } = useSpawnPlayer();
 
   // Get current game state from store
-  const { gamePhase: storeGamePhase } = useAppStore();
+  const { gamePhase: storeGamePhase, isPlayerInitialized } = useAppStore();
 
   //Hook to access the connector
   const { connector } = useAccount();
@@ -65,16 +57,14 @@ export function StatusBar() {
   // Determine which hook's data to prioritize
   const isConnected = status === "connected";
   const actionInProgress = initActionInProgress || spawnActionInProgress;
-  const lastAction = spawnLastAction || initLastAction;
   const hasError = playerError || spawnError || initError;
   const isLoading = isConnecting || status === "connecting" || isInitializing || isSpawning || playerLoading || actionInProgress;
   
-  // Determine current game phase (prioritize store, then player hook, then spawn hook)
-  const gamePhase = storeGamePhase || playerGamePhase || spawnGamePhase || GamePhase.UNINITIALIZED;
+  // Determine current game phase (prioritize store, then spawn hook)
+  const gamePhase = storeGamePhase || spawnGamePhase || GamePhase.UNINITIALIZED;
   
   // Determine transaction info (prioritize spawn over init)
   const txHash = spawnTxHash || initTxHash;
-  const txStatus = spawnTxStatus || initTxStatus;
 
   const formatAddress = (addr: string) => {
     if (!addr) return "";
@@ -83,27 +73,23 @@ export function StatusBar() {
 
   const getStatusMessage = () => {
     if (hasError) {
-      return spawnError || initError || playerError?.message || "An error occurred";
+      return spawnError || initError || playerError || "An error occurred";
     }
     
     if (!isConnected) return "Connect your controller to start playing";
-    
-    if (actionInProgress && lastAction) {
-      return lastAction;
-    }
     
     if (isInitializing) {
       return "Initializing player...";
     }
     
     if (isSpawning) {
-      switch (currentStep) {
+      switch (spawnStatus) {
         case 'checking':
           return "Checking player status...";
         case 'spawning':
           return "Creating player on blockchain...";
-        case 'loading':
-          return "Loading player data...";
+        case 'processing':
+          return "Processing transaction...";
         case 'success':
           return "Player ready!";
         default:
@@ -119,16 +105,18 @@ export function StatusBar() {
         return isConnected ? "Initialize your player to start" : "Connect to begin";
       case GamePhase.INITIALIZING:
         return "Setting up your player...";
-      case GamePhase.SPAWNING:
-        return "Creating player on blockchain...";
-      case GamePhase.PLAYING:
-        return "Ready to play!";
+      case GamePhase.SPAWNED:
+        return "Player spawned successfully!";
+      case GamePhase.WALKING:
+        return "Ready to explore!";
+      case GamePhase.AT_SHRINE:
+        return "At shrine - interact to continue";
+      case GamePhase.FIGHTING_GATEKEEPER:
+        return "Fighting gatekeeper!";
+      case GamePhase.OVERLOADED:
+        return "Player overloaded";
       case GamePhase.DEAD:
         return "Player is dead - respawn needed";
-      case GamePhase.ENCOUNTER:
-        return "In encounter";
-      case GamePhase.OVERLOAD:
-        return "Player overloaded";
       default:
         return player || playerExists ? "Ready to play!" : "Preparing...";
     }
@@ -141,13 +129,13 @@ export function StatusBar() {
     if (isInitializing) return { color: "bg-yellow-500", text: "Initializing..." };
     
     if (isSpawning) {
-      switch (currentStep) {
+      switch (spawnStatus) {
         case 'checking':
           return { color: "bg-blue-500", text: "Checking..." };
         case 'spawning':
           return { color: "bg-yellow-500", text: "Creating..." };
-        case 'loading':
-          return { color: "bg-blue-500", text: "Loading..." };
+        case 'processing':
+          return { color: "bg-blue-500", text: "Processing..." };
         case 'success':
           return { color: "bg-green-500", text: "Success" };
         default:
@@ -161,33 +149,20 @@ export function StatusBar() {
         return { color: "bg-yellow-500", text: "Not Initialized" };
       case GamePhase.INITIALIZING:
         return { color: "bg-blue-500", text: "Initializing..." };
-      case GamePhase.SPAWNING:
-        return { color: "bg-yellow-500", text: "Spawning..." };
-      case GamePhase.PLAYING:
-        return { color: "bg-green-500", text: "Playing" };
+      case GamePhase.SPAWNED:
+        return { color: "bg-green-500", text: "Spawned" };
+      case GamePhase.WALKING:
+        return { color: "bg-green-500", text: "Exploring" };
+      case GamePhase.AT_SHRINE:
+        return { color: "bg-purple-500", text: "At Shrine" };
+      case GamePhase.FIGHTING_GATEKEEPER:
+        return { color: "bg-red-500", text: "Fighting" };
+      case GamePhase.OVERLOADED:
+        return { color: "bg-orange-500", text: "Overloaded" };
       case GamePhase.DEAD:
         return { color: "bg-red-500", text: "Dead" };
-      case GamePhase.ENCOUNTER:
-        return { color: "bg-purple-500", text: "In Encounter" };
-      case GamePhase.OVERLOAD:
-        return { color: "bg-orange-500", text: "Overloaded" };
       default:
         return player || playerExists ? { color: "bg-green-500", text: "Ready" } : { color: "bg-yellow-500", text: "Not Ready" };
-    }
-  };
-
-  const getTxStatusDisplay = () => {
-    if (!txStatus) return null;
-    
-    switch (txStatus) {
-      case 'PENDING':
-        return { icon: '⏳', text: 'Processing', color: 'text-yellow-400' };
-      case 'SUCCESS':
-        return { icon: '✅', text: 'Confirmed', color: 'text-green-400' };
-      case 'REJECTED':
-        return { icon: '❌', text: 'Failed', color: 'text-red-400' };
-      default:
-        return null;
     }
   };
 
@@ -249,13 +224,10 @@ export function StatusBar() {
   }, [status, hasError, resetInitializer, resetSpawner]);
 
   const playerStatus = getPlayerStatus();
-  const txStatusDisplay = getTxStatusDisplay();
 
-  // Determine which buttons to show
-  const showInitializeButton = isConnected && !hasError && gamePhase === GamePhase.UNINITIALIZED && !isPlayerInitialized && !player;
-  const showSpawnButton = isConnected && !hasError && isPlayerInitialized && !player && !playerExists;
-  const showCheckButton = isConnected && !hasError && !isPlayerInitialized && !player;
-  const showPlayerReadyButton = (player || playerExists || spawnCompleted || initCompleted) && !hasError && gamePhase === GamePhase.PLAYING;
+  // Determine which buttons to show based on current state
+  const showInitializeButton = isConnected && !hasError && !isPlayerInitialized && !player && gamePhase === GamePhase.UNINITIALIZED; 
+  const showPlayerReadyButton = (player || playerExists) && !hasError && (gamePhase === GamePhase.WALKING || gamePhase === GamePhase.SPAWNED || gamePhase === GamePhase.AT_SHRINE);
 
   return (
     <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-8">
@@ -296,8 +268,6 @@ export function StatusBar() {
                 </Button>
               )}
 
-              {/* Check and Initialize Button - Shows when connected but unclear state */}
-              {showCheckButton && (
                 <Button
                   onClick={handleCheckAndInitialize}
                   disabled={isLoading}
@@ -315,10 +285,9 @@ export function StatusBar() {
                     </>
                   )}
                 </Button>
-              )}
-
+          
               {/* Initialize Player Button - Only show when uninitialized */}
-              
+              {showInitializeButton && (
                 <Button
                   onClick={handleInitialize}
                   disabled={isLoading}
@@ -336,29 +305,21 @@ export function StatusBar() {
                     </>
                   )}
                 </Button>
-              
+              )}
                
+              
                 <Button
                   onClick={handleSpawn}
-                  disabled={isLoading}
                   className="px-6 py-3 font-semibold transition-all duration-300 shadow-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSpawning ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {currentStep === 'checking' && 'Checking...'}
-                      {currentStep === 'spawning' && 'Spawning...'}
-                      {currentStep === 'loading' && 'Loading...'}
-                      {currentStep === 'success' && 'Success!'}
-                    </>
-                  ) : (
+                  
                     <>
                       <UserPlus className="w-4 h-4 mr-2" />
                       Spawn Player
                     </>
-                  )}
+               
                 </Button>
-              
+             
 
               {/* Player Ready Button - Only show when player exists and ready */}
               {showPlayerReadyButton && (
@@ -371,27 +332,24 @@ export function StatusBar() {
                 </Button>
               )}
 
-              {/* Refresh Player Button - Show when connected */}
-              {isConnected && (
+          
                 <Button
                   onClick={refetchPlayer}
-                  disabled={isLoading}
                   variant="outline"
                   className="px-4 py-3 border-purple-400/40 hover:border-purple-400/60 hover:bg-purple-500/10 text-purple-400 hover:text-purple-300 transition-all duration-300 disabled:opacity-50"
                 >
-                  {playerLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
+                  
+                 
                     <RefreshCw className="w-4 h-4" />
-                  )}
+                 
                 </Button>
-              )}
+             
 
               <Button
                 onClick={handleDisconnect}
                 variant="outline"
                 className="px-4 py-3 border-red-400/40 hover:border-red-400/60 hover:bg-red-500/10 text-red-400 hover:text-red-300 transition-all duration-300"
-                disabled={isLoading}
+          
               >
                 <LogOut className="w-4 h-4" />
               </Button>
@@ -424,21 +382,21 @@ export function StatusBar() {
           <div className="flex items-center gap-2 text-red-400 text-sm">
             <AlertCircle className="w-4 h-4" />
             <span className="font-semibold">Error:</span>
-            <span>{spawnError || initError || playerError?.message}</span>
+            <span>{spawnError || initError || playerError}</span>
           </div>
         </div>
       )}
 
       {/* Transaction Hash Display */}
-      {txHash && txStatusDisplay && (
+      {txHash && (
         <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
           <div className="text-blue-400 text-sm space-y-2">
             <div className="flex items-center gap-2">
               <span className="font-semibold">
                 {spawnTxHash ? "Player Creation Transaction:" : "Player Initialization Transaction:"}
               </span>
-              <span className={`ml-2 ${txStatusDisplay.color}`}>
-                {txStatusDisplay.icon} {txStatusDisplay.text}
+              <span className="text-yellow-400 ml-2">
+                ⏳ Processing
               </span>
             </div>
             <div className="flex items-center gap-3">

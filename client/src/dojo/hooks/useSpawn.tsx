@@ -7,24 +7,14 @@ import { useStarknetConnect } from "./useStarknetConnect";
 import useAppStore, { GamePhase } from "../../zustand/store";
 import { usePlayer } from "./usePlayer";
 
-// Types
+// Simplified state types
 interface SpawnState {
-  isSpawning: boolean;
+  status: 'idle' | 'checking' | 'spawning' | 'processing' | 'success' | 'error';
   error: string | null;
-  completed: boolean;
-  step: 'checking' | 'spawning' | 'loading' | 'success';
   txHash: string | null;
-  txStatus: 'PENDING' | 'SUCCESS' | 'REJECTED' | null;
 }
 
-interface SpawnResponse {
-  success: boolean;
-  playerExists: boolean;
-  transactionHash?: string;
-  error?: string;
-}
-
-interface FullInitializeResponse {
+interface SpawnResult {
   success: boolean;
   playerExists: boolean;
   transactionHash?: string;
@@ -33,360 +23,248 @@ interface FullInitializeResponse {
 
 export const useSpawnPlayer = () => {
   const { useDojoStore, client } = useDojoSDK();
-  const state = useDojoStore((state) => state);
+  const dojoState = useDojoStore((state) => state);
   const { account } = useAccount();
-  const { status } = useStarknetConnect();
-  const { player, isLoading: playerLoading, refetch: refetchPlayer } = usePlayer();
+  const { status: connectionStatus } = useStarknetConnect();
+  const { refetch: refetchPlayer } = usePlayer();
   
   // Store actions
   const { 
-    setLoading, 
     setError,
     setGamePhase,
-    initializePlayer: storeInitializePlayer,
-    startNewGame,
     setPlayerInitialized,
     setActionInProgress,
-    setLastAction
+    player,
+    isPlayerInitialized,
+    gamePhase,
+    actionInProgress
   } = useAppStore();
 
-  // Local state
+  // Local spawn state
   const [spawnState, setSpawnState] = useState<SpawnState>({
-    isSpawning: false,
+    status: 'idle',
     error: null,
-    completed: false,
-    step: 'checking',
-    txHash: null,
-    txStatus: null
+    txHash: null
   });
-  
-  // Tracking if we're currently spawning
-  const [isSpawning, setIsSpawning] = useState(false);
-  
-  /**
-   * Spawn player - second step in the process
-   */
-  const spawnPlayer = useCallback(async (): Promise<SpawnResponse> => {
-    // Prevent multiple executions
-    if (isSpawning) {
-      return { success: false, playerExists: false, error: "Already spawning" };
+
+  // Validation helpers
+  const validateConnection = useCallback((): string | null => {
+    if (connectionStatus !== "connected") {
+      return "Wallet not connected. Please connect your wallet first.";
     }
-    
-    setIsSpawning(true);
-    setActionInProgress(true);
-    setLastAction("Spawning player...");
-    
-    // Validation: Check if wallet is connected
-    if (status !== "connected") {
-      const error = "Wallet not connected. Please connect your wallet first.";
-      setSpawnState(prev => ({ ...prev, error }));
-      setError(error);
-      setActionInProgress(false);
-      setIsSpawning(false);
-      return { success: false, playerExists: false, error };
+    if (!account) {
+      return "No account found. Please connect your wallet.";
+    }
+    return null;
+  }, [connectionStatus, account]);
+
+  const isProcessing = spawnState.status !== 'idle' && spawnState.status !== 'error';
+
+  // Core spawn function
+  const spawnPlayer = useCallback(async (): Promise<SpawnResult> => {
+    if (isProcessing) {
+      return { success: false, playerExists: false, error: "Already processing" };
     }
 
-    // Validation: Check if account exists
-    if (!account) {
-      const error = "No account found. Please connect your wallet.";
-      setSpawnState(prev => ({ ...prev, error }));
-      setError(error);
-      setActionInProgress(false);
-      setIsSpawning(false);
-      return { success: false, playerExists: false, error };
+    const validationError = validateConnection();
+    if (validationError) {
+      setSpawnState({ status: 'error', error: validationError, txHash: null });
+      return { success: false, playerExists: false, error: validationError };
     }
 
     const transactionId = uuidv4();
-
+    
     try {
       // Start spawning
-      setSpawnState(prev => ({ 
-        ...prev, 
-        isSpawning: true, 
-        error: null,
-        step: 'spawning',
-        txStatus: 'PENDING'
-      }));
-      
-      // Clear any previous errors
+      setSpawnState({ status: 'spawning', error: null, txHash: null });
+      setActionInProgress(true);
+      setGamePhase(GamePhase.SPAWNED);
       setError(null);
-      setGamePhase(GamePhase.SPAWNING);
 
       console.log("🎯 Spawning player...");
-      setLastAction("Spawning player...");
 
       // Execute spawn transaction
-      console.log("📤 Executing spawn transaction...");
       const spawnTx = await client.actions.spawn(account as Account);
-      
-      console.log("📥 Spawn transaction response:", spawnTx);
-      
-      if (spawnTx?.transaction_hash) {
-        setSpawnState(prev => ({ 
-          ...prev, 
-          txHash: spawnTx.transaction_hash
-        }));
+      console.log("📥 Spawn transaction:", spawnTx);
+
+      if (!spawnTx || spawnTx.code !== "SUCCESS") {
+        throw new Error(`Spawn failed: ${spawnTx?.code || 'Unknown error'}`);
       }
+
+      // Update state with transaction hash
+      setSpawnState(prev => ({ 
+        ...prev, 
+        status: 'processing',
+        txHash: spawnTx.transaction_hash 
+      }));
+
+      // Wait for transaction processing
+      console.log("⏳ Processing spawn transaction...");
+      await new Promise(resolve => setTimeout(resolve, 3500));
+
+      // Refetch player data
+      console.log("🔄 Refetching player data...");
+      await refetchPlayer();
       
-      if (spawnTx && spawnTx.code === "SUCCESS") {
-        console.log("🎉 Player spawned successfully!");
-        
-        setSpawnState(prev => ({ 
-          ...prev, 
-          txStatus: 'SUCCESS',
-          step: 'loading'
-        }));
-        
-        // Wait for spawn transaction to be processed
-        console.log("⏳ Waiting for spawn transaction to be processed...");
-        setLastAction("Processing spawn...");
-        await new Promise(resolve => setTimeout(resolve, 3500));
-        
-        // Refetch player data
-        console.log("🔄 Refetching player data after spawn...");
-        setLastAction("Loading player data...");
-        await refetchPlayer();
-        
-        // Update store with player data and set game state
-        const updatedState = useAppStore.getState();
-        if (updatedState.player) {
-          storeInitializePlayer(updatedState.player);
-          setGamePhase(GamePhase.PLAYING);
-          setPlayerInitialized(true);
-        }
-        
-        setSpawnState(prev => ({ 
-          ...prev, 
-          completed: true,
-          isSpawning: false,
-          step: 'success'
-        }));
-        
-        // Confirm transaction in store
-        state.confirmTransaction(transactionId);
-        
-        setActionInProgress(false);
-        setLastAction("Player ready");
-        setIsSpawning(false);
-        
-        return { 
-          success: true, 
-          playerExists: false,
-          transactionHash: spawnTx.transaction_hash 
-        };
-      } else {
-        throw new Error("Spawn transaction failed with code: " + spawnTx?.code);
-      }
+      // Additional wait to ensure store updates
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Confirm transaction
+      dojoState.confirmTransaction(transactionId);
+      
+      // Update final state
+      setSpawnState({ status: 'success', error: null, txHash: spawnTx.transaction_hash });
+      setGamePhase(GamePhase.WALKING);
+      setPlayerInitialized(true);
+      setActionInProgress(false);
+
+      console.log("🎉 Player spawned successfully!");
+      
+      return { 
+        success: true, 
+        playerExists: false,
+        transactionHash: spawnTx.transaction_hash 
+      };
 
     } catch (error) {
       const errorMessage = error instanceof Error 
         ? error.message 
         : "Failed to spawn player. Please try again.";
       
-      console.error("❌ Error spawning player:", error);
+      console.error("❌ Spawn error:", error);
       
-      // Revert optimistic update if applicable
-      state.revertOptimisticUpdate(transactionId);
-      
-      // Update states
-      setSpawnState(prev => ({ 
-        ...prev, 
-        error: errorMessage,
-        isSpawning: false,
-        txStatus: 'REJECTED',
-        step: 'checking'
-      }));
-      
+      // Cleanup on error
+      dojoState.revertOptimisticUpdate(transactionId);
+      setSpawnState({ status: 'error', error: errorMessage, txHash: null });
       setError(errorMessage);
       setGamePhase(GamePhase.UNINITIALIZED);
       setActionInProgress(false);
-      setLastAction("Spawn failed");
-      setIsSpawning(false);
       
       return { success: false, playerExists: false, error: errorMessage };
     }
   }, [
-    status, 
-    account, 
-    refetchPlayer, 
-    isSpawning, 
-    state, 
+    isProcessing,
+    validateConnection,
     client,
-    setError,
-    setGamePhase,
-    storeInitializePlayer,
-    setPlayerInitialized,
+    account,
+    refetchPlayer,
+    dojoState,
     setActionInProgress,
-    setLastAction
-  ]); 
+    setGamePhase,
+    setError,
+    setPlayerInitialized
+  ]);
 
-  /**
-   * Check if player exists and handle the full initialization flow
-   */
-  const checkAndInitializePlayer = useCallback(async (): Promise<FullInitializeResponse> => {
-    // Prevent multiple executions
-    if (isSpawning) {
+  // Check if player exists and initialize
+  const checkAndInitialize = useCallback(async (): Promise<SpawnResult> => {
+    if (isProcessing) {
       return { success: false, playerExists: false, error: "Already processing" };
     }
-    
-    setActionInProgress(true);
-    setLastAction("Checking player...");
-    
-    try {
-      setSpawnState(prev => ({ 
-        ...prev, 
-        step: 'checking'
-      }));
-      
-      // Clear any previous errors
-      setError(null);
-      setGamePhase(GamePhase.INITIALIZING);
 
-      console.log("🎮 Starting player check and initialization...");
-      
-      // Refetch player data
-      console.log("🔄 Fetching latest player data...");
-      setLastAction("Checking player data...");
+    const validationError = validateConnection();
+    if (validationError) {
+      setSpawnState({ status: 'error', error: validationError, txHash: null });
+      return { success: false, playerExists: false, error: validationError };
+    }
+
+    try {
+      setSpawnState({ status: 'checking', error: null, txHash: null });
+      setActionInProgress(true);
+      setGamePhase(GamePhase.INITIALIZING);
+      setError(null);
+
+      console.log("🎮 Checking player status...");
+
+      // Refetch latest player data
       await refetchPlayer();
-      
-      // Wait a bit to ensure data is loaded
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Get current player state from store
+
+      // Check current state
       const currentState = useAppStore.getState();
-      const storePlayer = currentState.player;
-      
-      // Check if player exists
-      const playerExists = storePlayer !== null && currentState.isPlayerInitialized;
-      
-      console.log("🎮 Player check:", { 
+      const playerExists = currentState.player !== null && currentState.isPlayerInitialized;
+
+      console.log("🎮 Player check result:", { 
         playerExists, 
-        playerInStore: !!storePlayer,
-        isPlayerInitialized: currentState.isPlayerInitialized,
-        accountAddress: account?.address,
-        gamePhase: currentState.gamePhase
+        hasPlayer: !!currentState.player,
+        isInitialized: currentState.isPlayerInitialized
       });
 
       if (playerExists) {
-        // Player already exists - just update the game phase
-        console.log("✅ Player already exists, setting game phase to playing...");
-        
-        setSpawnState(prev => ({ 
-          ...prev, 
-          completed: true,
-          step: 'success'
-        }));
-        
-        setGamePhase(GamePhase.PLAYING);
+        // Player exists - ready to play
+        setSpawnState({ status: 'success', error: null, txHash: null });
+        setGamePhase(GamePhase.WALKING);
         setActionInProgress(false);
-        setLastAction("Player ready");
         
-        return { 
-          success: true, 
-          playerExists: true
-        };
+        console.log("✅ Player ready");
+        
+        return { success: true, playerExists: true };
       } else {
-        // Player doesn't exist - redirect to initialization flow
-        console.log("🆕 Player does not exist, needs initialization and spawn...");
-        
-        setActionInProgress(false);
-        setLastAction("Player needs initialization");
+        // Player needs to be spawned
+        setSpawnState({ status: 'idle', error: null, txHash: null });
         setGamePhase(GamePhase.UNINITIALIZED);
+        setActionInProgress(false);
+        
+        console.log("🆕 Player needs spawning");
         
         return { 
           success: false, 
           playerExists: false,
-          error: "Player needs to be initialized first"
+          error: "Player needs to be spawned"
         };
       }
 
     } catch (error) {
       const errorMessage = error instanceof Error 
         ? error.message 
-        : "Failed to check player status. Please try again.";
+        : "Failed to check player status";
       
-      console.error("❌ Error checking player:", error);
+      console.error("❌ Check error:", error);
       
-      setSpawnState(prev => ({ 
-        ...prev, 
-        error: errorMessage,
-        step: 'checking'
-      }));
-      
+      setSpawnState({ status: 'error', error: errorMessage, txHash: null });
       setError(errorMessage);
       setGamePhase(GamePhase.UNINITIALIZED);
       setActionInProgress(false);
-      setLastAction("Check failed");
       
       return { success: false, playerExists: false, error: errorMessage };
     }
   }, [
-    account, 
-    refetchPlayer, 
-    isSpawning,
-    setError,
-    setGamePhase,
+    isProcessing,
+    validateConnection,
+    refetchPlayer,
     setActionInProgress,
-    setLastAction
+    setGamePhase,
+    setError
   ]);
 
-  /**
-   * Reset spawn state
-   */
-  const resetSpawner = useCallback(() => {
-    console.log("🔄 Resetting spawner state...");
-    setIsSpawning(false);
-    setSpawnState({
-      isSpawning: false,
-      error: null,
-      completed: false,
-      step: 'checking',
-      txHash: null,
-      txStatus: null
-    });
-    
-    // Reset store states
+  // Reset function
+  const reset = useCallback(() => {
+    console.log("🔄 Resetting spawn state");
+    setSpawnState({ status: 'idle', error: null, txHash: null });
     setError(null);
     setActionInProgress(false);
-    setLastAction(null);
-  }, [setError, setActionInProgress, setLastAction]);
+  }, [setError, setActionInProgress]);
 
-  /**
-   * Start a completely new game (reset everything)
-   */
-  const startNewGameFlow = useCallback(() => {
-    console.log("🎮 Starting new game flow...");
-    startNewGame();
-    resetSpawner();
-    setGamePhase(GamePhase.UNINITIALIZED);
-  }, [startNewGame, resetSpawner, setGamePhase]);
-
-  // Sync loading state with store
+  // Auto-reset on connection change
   useEffect(() => {
-    setLoading(spawnState.isSpawning || playerLoading);
-  }, [spawnState.isSpawning, playerLoading, setLoading]);
-
-  // Get current store state for return values
-  const currentStoreState = useAppStore();
+    if (connectionStatus !== "connected") {
+      reset();
+    }
+  }, [connectionStatus, reset]);
 
   return {
     // State
-    isSpawning: spawnState.isSpawning,
+    status: spawnState.status,
     error: spawnState.error,
-    completed: spawnState.completed,
-    currentStep: spawnState.step,
     txHash: spawnState.txHash,
-    txStatus: spawnState.txStatus,
-    isConnected: status === "connected",
-    playerExists: currentStoreState.player !== null && currentStoreState.isPlayerInitialized,
-    gamePhase: currentStoreState.gamePhase,
-    actionInProgress: currentStoreState.actionInProgress,
-    lastAction: currentStoreState.lastAction,
+    isProcessing,
+    isConnected: connectionStatus === "connected",
+    playerExists: player !== null && isPlayerInitialized,
+    gamePhase,
+    actionInProgress,
     
     // Actions
     spawnPlayer,
-    checkAndInitializePlayer,
-    resetSpawner,
-    startNewGameFlow
+    checkAndInitialize,
+    reset
   };
 };

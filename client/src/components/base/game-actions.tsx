@@ -1,24 +1,161 @@
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Dumbbell, Loader2, ExternalLink } from "lucide-react";
+import {
+  Dumbbell,
+  Loader2,
+  ExternalLink,
+  Sword,
+  Heart,
+  Sparkles,
+  Shield,
+  Gem,
+} from "lucide-react";
 
 import useAppStore from "../../zustand/store";
-import { useStepForwardAction } from "../../dojo/hooks/useStepForward";
+import { useStepForward } from "../../dojo/hooks/useStepForward";
+import {
+  useTakeDamage,
+  useAttackGatekeeper,
+  useInteractWithShrine,
+  useCreateGatekeeper,
+  useCreateShrine,
+} from "../../dojo/hooks/useGameActions";
 
 export function GameActions() {
   const player = useAppStore((state) => state.player);
-
-  const { stepForwardState, executeStepForward, canStepForward } = useStepForwardAction();
+  const { position} = useAppStore();
+  // Hook implementations
+  const stepForward = useStepForward();
+  const takeDamage = useTakeDamage();
+  const attackGatekeeper = useAttackGatekeeper();
+  const interactWithShrine = useInteractWithShrine();
+  const createGatekeeper = useCreateGatekeeper();
+  const createShrine = useCreateShrine();
 
   const actions = [
     {
       icon: Dumbbell,
       label: "Step Forward",
-      description: "+10 EXP",
-      onClick: executeStepForward,
+      description: "Move forward +1 position",
+      onClick: stepForward.execute,
       color: "from-blue-500 to-blue-600",
-      state: stepForwardState,
-      canExecute: canStepForward,
+      state: {
+        isLoading: stepForward.state.status === "pending",
+        error: stepForward.state.error,
+        txStatus:
+          stepForward.state.status === "success"
+            ? "SUCCESS"
+            : stepForward.state.status === "pending"
+            ? "PENDING"
+            : null,
+        txHash: stepForward.state.txHash,
+      },
+      canExecute: stepForward.canExecute,
+    },
+    {
+      icon: Heart,
+      label: "Take Damage",
+      description: "Test damage system (-10 HP)",
+      onClick: () => takeDamage.takeDamage(10),
+      color: "from-red-500 to-red-600",
+      state: {
+        isLoading: takeDamage.isProcessing,
+        error: takeDamage.error,
+        txStatus:
+          takeDamage.status === "success"
+            ? "SUCCESS"
+            : takeDamage.status === "processing"
+            ? "PENDING"
+            : null,
+        txHash: takeDamage.txHash,
+      },
+      canExecute: takeDamage.isConnected && !takeDamage.isProcessing,
+    },
+    {
+      icon: Sword,
+      label: "Attack Gatekeeper",
+      // description: attackGatekeeper.currentGatekeeper
+        // ? `HP: ${attackGatekeeper.currentGatekeeper.health}`
+        // : "No gatekeeper found",
+      onClick: () => attackGatekeeper.attackGatekeeper(),
+      color: "from-orange-500 to-orange-600",
+      // state: {
+      //   isLoading: attackGatekeeper.isProcessing,
+      //   error: attackGatekeeper.error,
+      //   txStatus:
+      //     attackGatekeeper.status === "success"
+      //       ? "SUCCESS"
+      //       : attackGatekeeper.status === "processing"
+      //       ? "PENDING"
+      //       : null,
+        // txHash: attackGatekeeper.txHash,
+      // },
+      // canExecute: !attackGatekeeper.isProcessing,
+    },
+    {
+      icon: Shield,
+      label: "Create Gatekeeper",
+      description: "Spawn a gatekeeper (100 HP, 10 DMG)",
+      onClick: () => {
+        const currentPosition = position?.x || 0;
+        createGatekeeper.createGatekeeper(currentPosition, 100, 10);
+      },
+      color: "from-gray-500 to-gray-600",
+      state: {
+        isLoading: false,
+        error: null,
+        txStatus: null,
+        txHash: null,
+      },
+      canExecute: Boolean(player),
+    },
+    {
+      icon: Gem,
+      label: "Create Shrine",
+      description: "Spawn a shrine with blessing",
+      onClick: () => {
+        const currentPosition = position?.x || 0;
+        const randomBlessing = Math.floor(Math.random() * 50) + 10; // 10-59 blessing
+        const isTrap = Math.random() < 0.2; // 20% chance of trap
+        createShrine.createShrine(
+          currentPosition,
+          randomBlessing,
+          undefined,
+          isTrap
+        );
+      },
+      color: "from-cyan-500 to-cyan-600",
+      state: {
+        isLoading: false,
+        error: null,
+        txStatus: null,
+        txHash: null,
+      },
+      canExecute: Boolean(player),
+    },
+    {
+      icon: Sparkles,
+      label: "Interact with Shrine",
+      // description: interactWithShrine.currentShrine
+      //   ? `Burn ${interactWithShrine.recommendedStepsBurn} steps`
+      //   : "No shrine found",
+      onClick: () => {
+       interactWithShrine.interactWithShrine(1n)
+      },
+      // color: "from-purple-500 to-purple-600",
+      // state: {
+      //   isLoading: interactWithShrine.isProcessing,
+      //   error: interactWithShrine.error,
+      //   txStatus:
+      //     interactWithShrine.status === "success"
+      //       ? "SUCCESS"
+      //       : interactWithShrine.status === "processing"
+      //       ? "PENDING"
+      //       : null,
+        // txHash: interactWithShrine.txHash,
+      // },
+      // canExecute:
+      //   interactWithShrine.canInteract && !interactWithShrine.isProcessing,
     },
   ];
 
@@ -30,9 +167,11 @@ export function GameActions() {
   return (
     <Card className="bg-white/5 backdrop-blur-xl border-white/10">
       <CardHeader>
-        <CardTitle className="text-white text-xl font-bold">Game Actions</CardTitle>
+        <CardTitle className="text-white text-xl font-bold">
+          Game Actions
+        </CardTitle>
       </CardHeader>
-       
+
       <CardContent className="space-y-4">
         {!player && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-4">
@@ -44,14 +183,13 @@ export function GameActions() {
 
         {actions.map((action) => {
           const Icon = action.icon;
-          const isLoading = action.state.isLoading;
-          const hasError = Boolean(action.state.error);
+          const isLoading = action.state?.isLoading;
+          const hasError = Boolean(action.state?.error);
 
           return (
             <div key={action.label} className="space-y-2">
               <Button
-                onClick={action.onClick}
-                disabled={!action.canExecute || isLoading}
+                onClick={action.onClick} 
                 className={`w-full h-14 bg-gradient-to-r ${action.color} hover:scale-105 transition-all duration-300 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {isLoading ? (
@@ -61,31 +199,34 @@ export function GameActions() {
                 )}
                 <div className="flex flex-col items-start flex-1">
                   <span className="font-semibold">{action.label}</span>
-                  <span className="text-xs opacity-80">{action.description}</span>
+                  <span className="text-xs opacity-80">
+                    {action.description}
+                  </span>
                 </div>
               </Button>
 
-              {(action.state.txStatus || hasError) && (
+              {(action?.state?.txStatus || hasError) && (
                 <div
-                  className={`p-3 rounded-lg border text-sm ${hasError
-                    ? "bg-red-500/10 border-red-500/30 text-red-400"
-                    : action.state.txStatus === "SUCCESS"
+                  className={`p-3 rounded-lg border text-sm ${
+                    hasError
+                      ? "bg-red-500/10 border-red-500/30 text-red-400"
+                      : action?.state?.txStatus === "SUCCESS"
                       ? "bg-green-500/10 border-green-500/30 text-green-400"
                       : "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
-                    }`}
+                  }`}
                 >
                   {hasError ? (
-                    `❌ Error: ${action.state.error}`
-                  ) : action.state.txStatus === "SUCCESS" ? (
+                    `❌ Error: ${action?.state?.error}`
+                  ) : action?.state?.txStatus === "SUCCESS" ? (
                     <div className="space-y-2">
-                      <div>✅ {action.label} completed successfully!</div>
-                      {action.state.txHash && (
+                      <div>✅ {action?.label} completed successfully!</div>
+                      {action?.state.txHash && (
                         <div className="flex items-center gap-2 text-xs">
                           <span className="font-mono bg-black/20 px-2 py-1 rounded">
-                            {formatAddress(action.state.txHash)}
+                            {formatAddress(action?.state.txHash)}
                           </span>
                           <a
-                            href={`https://sepolia.starkscan.co/tx/${action.state.txHash}`}
+                            href={`https://sepolia.starkscan.co/tx/${action?.state.txHash}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 hover:underline"
@@ -99,10 +240,10 @@ export function GameActions() {
                   ) : (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        ⏳ {action.label} processing...
+                        <Loader2 className="w-3 h-3 animate-spin" />⏳{" "}
+                        {action.label} processing...
                       </div>
-                      {action.state.txHash && (
+                      {action?.state?.txHash && (
                         <div className="flex items-center gap-2 text-xs">
                           <span className="font-mono bg-black/20 px-2 py-1 rounded">
                             {formatAddress(action.state.txHash)}

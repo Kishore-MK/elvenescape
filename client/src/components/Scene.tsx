@@ -8,16 +8,39 @@ import CameraController from "./CameraController";
 import Shrine from "./Shrine";
 import Enemy from "./Enemy";
 import { useMovement } from "../hooks/useMovement";
+import Entities from "./Entities";
+
+interface GameState {
+  health: number;
+  ego: number;
+  steps: number;
+  inventory: {
+    crystals: number;
+    artifacts: number;
+  };
+}
+
+interface SceneProps {
+  gameState: GameState;
+  onDamage: (amount: number) => void;
+  onKillReward: (egoAmount: number) => void;
+  onStep: () => void;
+}
 
 // Main scene component
-const Scene: React.FC = () => {
+const Scene: React.FC<SceneProps> = ({ 
+  gameState, 
+  onDamage, 
+  onKillReward, 
+  onStep 
+}) => {
   const { position } = useMovement(5);
   const { gl } = useThree();
-
+  
   // Separate visibility states for shrine and enemy
   const [showShrine, setShowShrine] = useState(true);
   const [showEnemy, setShowEnemy] = useState(true);
-     
+  
   // Enable shadow mapping on the renderer
   React.useEffect(() => {
     gl.shadowMap.enabled = true;
@@ -46,23 +69,28 @@ const Scene: React.FC = () => {
         intensity={0.3}
         color="#ffffff"
       />
+
       {/* Environment */}
       <fog attach="fog" args={["#4a5d23", 20, 120]} />
       <color attach="background" args={["#87CEEB"]} />
+
       {/* Camera follows player */}
       <CameraController target={position} />
+
       {/* Scene elements */}
       <Track />
-      <Player />
-
-
-      <Shrine position={[-2, 0, 35]} scale={5} visible={showShrine} />
-      
-      <Enemy
-        position={[1, 0, 14]}
-        playerPosition={position}  
-        triggerDistance={5}  
-        scale={[2, 2, 2]}
+      <Player 
+        onStep={onStep}
+        health={gameState.health}
+      />
+      <Entities 
+        shrineCount={3} 
+        enemyCount={5} 
+        spawnAreaStart={30} 
+        spawnAreaEnd={300}
+        onDamage={onDamage}
+        onKillReward={onKillReward}
+        damagePerSecond={10}
       />
     </>
   );

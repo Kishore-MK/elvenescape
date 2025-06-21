@@ -7,10 +7,14 @@ interface MovementState {
   isMoving: boolean;
 }
 
-export const useMovement = (speed: number = 5) => {
-  const [keys, setKeys] = useState<{ [key: string]: boolean }>({}); 
+export const useMovement = (speed: number = 5, onStep?: () => void): MovementState => {
+  const [keys, setKeys] = useState<{ [key: string]: boolean }>({});
   const [isMoving, setIsMoving] = useState(false);
-    const [position, setPosition] = useState(new THREE.Vector3(0, 0, 0));
+  const [position, setPosition] = useState(new THREE.Vector3(0, 0, 0));
+  const lastPosition = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  const stepThreshold = 0.5; // Distance threshold to count as a step
+  const distanceAccumulator = useRef<number>(0);
+
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -34,20 +38,46 @@ export const useMovement = (speed: number = 5) => {
 
   // Update movement in the frame loop
   useFrame((_, delta) => {
-  if (keys['w']) {
-    setPosition(prev => {
-      const newPos = prev.clone();
-      newPos.z += speed * delta;
-      return newPos;
-    });
-    setIsMoving(true);
-  } else {
-    setIsMoving(false);
-  }
-});
+    let moveX = 0;
+    let moveZ = 0;
+    let moving = false;
+
+    // Check movement keys
+    if (keys['w']) {
+      moveZ += speed * delta;
+      moving = true;
+    }
+    if (keys['s']) {
+      moveZ -= speed * delta;
+      moving = true;
+    } 
+
+    setIsMoving(moving);
+
+    if (moving) {
+      setPosition(prev => {
+        const newPos = prev.clone();
+        newPos.x += moveX;
+        newPos.z += moveZ;
+
+        // Calculate distance moved for step counting
+        const distanceMoved = lastPosition.current.distanceTo(newPos);
+        distanceAccumulator.current += distanceMoved;
+
+        // Count a step when we've moved the threshold distance
+        if (distanceAccumulator.current >= stepThreshold && onStep) {
+          onStep();
+          distanceAccumulator.current = 0;
+        }
+
+        lastPosition.current.copy(newPos);
+        return newPos;
+      });
+    }
+  });
 
   return {
     position: position,
-    isMoving, 
+    isMoving,
   };
 };
