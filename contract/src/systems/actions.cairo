@@ -209,7 +209,7 @@ pub mod actions {
             current_encounter.encounter_type = encounter_result.encounter_type;
             current_encounter.entity_id = encounter_result.entity_id;
             if encounter_result.encounter_type != 0 {
-                current_encounter.position = position.x;
+                current_encounter.position = position.x+15;
             }
 
             // Write updated state

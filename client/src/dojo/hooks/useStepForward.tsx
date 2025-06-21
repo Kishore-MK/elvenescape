@@ -68,24 +68,14 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
     if (overloadState?.is_active) return `Overload active - ${overloadState.steps_remaining} steps remaining`;
     if (gamePhase === GamePhase.DEAD) return "Player is dead - respawn required";
     if (gamePhase === GamePhase.OVERLOAD) return "Overload state active";
-    if (gamePhase === GamePhase.ENCOUNTER) return "Active encounter in progress - resolve before stepping";
+    // if (gamePhase === GamePhase.ENCOUNTER) return "Active encounter in progress - resolve before stepping";
     if (gamePhase === GamePhase.UNINITIALIZED) return "Game not initialized";
     if (gamePhase === GamePhase.INITIALIZING) return "Game is initializing";
     if (gamePhase === GamePhase.SPAWNING) return "Player is spawning";
-    if (isInEncounter()) {
-      const encounterType = getCurrentEncounterType();
-      const encounterName = encounterType === EncounterType.GATEKEEPER 
-        ? "gatekeeper" 
-        : encounterType === EncounterType.SHRINE 
-        ? "shrine" 
-        : encounterType === EncounterType.TRAP 
-        ? "trap" 
-        : "unknown";
-      return `Cannot step during ${encounterName} encounter`;
-    }
+    
     if (actionInProgress) return "Another action is in progress";
     if (stepForwardState.isLoading) return "Step forward in progress";
-    if (!canTakeStep) return "Step not available";
+    // if (!canTakeStep) return "Step not available";
     
     return null;
   };

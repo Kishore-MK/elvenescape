@@ -112,6 +112,7 @@ const PLAYER_QUERY = `
           player
           encounter_type
           entity_id
+          position
         }
       }
     }
@@ -174,6 +175,7 @@ const fetchPlayerData = async (playerAddress: string): Promise<PlayerGameState> 
     }
 
     const data = result.data;
+    console.log("GraphQl response",  data);
     
     // Extract data from each model
     const playerData = data.kaadugamePlayerModels?.edges?.[0]?.node;
