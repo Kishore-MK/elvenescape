@@ -14,7 +14,7 @@ interface StepForwardActionState {
 interface UseStepForwardActionReturn {
   stepForwardState: StepForwardActionState;
   executeStepForward: () => Promise<void>;
-  canStepForward: boolean | undefined;
+  canStepForward: boolean;
   resetStepForwardState: () => void;
 }
 
@@ -22,7 +22,7 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
   const { account, status } = useAccount(); 
   const { client } = useDojoSDK();
   
-  // Store selectors
+  // Store selectors - using the updated store structure
   const {
     player,
     position,
@@ -31,7 +31,6 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
     gamePhase,
     overloadState,
     currentEncounter,
-    entitySpawnState,
     canTakeStep,
     isPlayerInitialized,
     actionInProgress,
@@ -43,7 +42,6 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
     setGamePhase,
     setCanTakeStep,
     setCurrentEncounter,
-    setEntitySpawnState,
     setActionInProgress,
     setLastAction,
     setError,
@@ -61,69 +59,74 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
     txStatus: null
   });
 
-  // Enhanced validation using store state
-  const isConnected = status === "connected";
-  const isAlive = Number(health?.current || 0) > 0;
-  const isNotOverloaded = !overloadState?.is_active;
-  const isPlayingPhase = gamePhase === GamePhase.PLAYING;
-  const hasNoActiveEncounter = !isInEncounter();
-  const isNotBusy = !actionInProgress && !stepForwardState.isLoading;
-  
-  const canStepForward = 
-    isConnected && 
-    account && 
-    isPlayerInitialized && 
-    isAlive && 
-    isNotOverloaded && 
-    isPlayingPhase && 
-    canTakeStep && 
-    isNotBusy;
- console.log("CAn step forward",isConnected,
-    account,
+  // Enhanced validation logic
+  const getValidationError = (): string | null => {
+    if (!account) return "Please connect your controller";
+    if (status !== "connected") return "Controller not connected";
+    if (!isPlayerInitialized) return "Player not initialized";
+    if (!health || Number(health.current) <= 0) return "Player is dead - respawn required";
+    if (overloadState?.is_active) return `Overload active - ${overloadState.steps_remaining} steps remaining`;
+    if (gamePhase === GamePhase.DEAD) return "Player is dead - respawn required";
+    if (gamePhase === GamePhase.OVERLOAD) return "Overload state active";
+    if (gamePhase === GamePhase.ENCOUNTER) return "Active encounter in progress - resolve before stepping";
+    if (gamePhase === GamePhase.UNINITIALIZED) return "Game not initialized";
+    if (gamePhase === GamePhase.INITIALIZING) return "Game is initializing";
+    if (gamePhase === GamePhase.SPAWNING) return "Player is spawning";
+    if (isInEncounter()) {
+      const encounterType = getCurrentEncounterType();
+      const encounterName = encounterType === EncounterType.GATEKEEPER 
+        ? "gatekeeper" 
+        : encounterType === EncounterType.SHRINE 
+        ? "shrine" 
+        : encounterType === EncounterType.TRAP 
+        ? "trap" 
+        : "unknown";
+      return `Cannot step during ${encounterName} encounter`;
+    }
+    if (actionInProgress) return "Another action is in progress";
+    if (stepForwardState.isLoading) return "Step forward in progress";
+    if (!canTakeStep) return "Step not available";
+    
+    return null;
+  };
+
+  const canStepForward = getValidationError() === null;
+
+  // Debug logging (can be removed in production)
+  console.log("Step Forward Validation:", {
+    canStepForward,
+    validationError: getValidationError(),
+    account: !!account,
+    status,
     isPlayerInitialized,
-    isAlive,
-    isNotOverloaded,
-    isPlayingPhase,
-    hasNoActiveEncounter,
+    isAlive: health ? Number(health.current) > 0 : false,
+    isNotOverloaded: !overloadState?.is_active,
+    gamePhase,
+    hasNoActiveEncounter: !isInEncounter(),
     canTakeStep,
-    isNotBusy);
+    isNotBusy: !actionInProgress && !stepForwardState.isLoading
+  });
  
   const executeStepForward = useCallback(async () => {
-    if (!canStepForward || !account) {
-      let errorMsg = "Cannot step forward right now";
+    const validationError = getValidationError();
+    
+    if (validationError) {
+      const errorState = {
+        isLoading: false,
+        error: validationError,
+        txHash: null,
+        txStatus: null
+      };
       
-      if (!account) {
-        errorMsg = "Please connect your controller";
-      } else if (!isPlayerInitialized) {
-        errorMsg = "Player not initialized";
-      } else if (!isAlive) {
-        errorMsg = "Player is dead - respawn required";
-      } else if (overloadState?.is_active) {
-        errorMsg = `Overload active - ${overloadState.steps_remaining} steps remaining`;
-      } else if (gamePhase === GamePhase.ENCOUNTER) {
-        errorMsg = "Active encounter in progress - resolve before stepping";
-      } else if (gamePhase === GamePhase.DEAD) {
-        errorMsg = "Player is dead - respawn required";
-      } else if (gamePhase === GamePhase.OVERLOAD) {
-        errorMsg = "Overload state active";
-      } else if (isInEncounter()) {
-        const encounterType = getCurrentEncounterType();
-        const encounterName = encounterType === EncounterType.GATEKEEPER 
-          ? "gatekeeper" 
-          : encounterType === EncounterType.SHRINE 
-          ? "shrine" 
-          : encounterType === EncounterType.TRAP 
-          ? "trap" 
-          : "unknown";
-        errorMsg = `Cannot step during ${encounterName} encounter`;
-      } else if (actionInProgress) {
-        errorMsg = "Another action is in progress";
-      } else if (!canTakeStep) {
-        errorMsg = "Step not available";
-      }
+      setStepForwardState(errorState);
+      setError(validationError);
       
-      setStepForwardState(prev => ({ ...prev, error: errorMsg }));
-      setError(errorMsg);
+      // Auto-clear error after 3 seconds
+      setTimeout(() => {
+        setStepForwardState(prev => ({ ...prev, error: null }));
+        setError(null);
+      }, 3000);
+      
       return;
     }
 
@@ -165,12 +168,12 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
         
         // Optimistic updates
         setPosition({
-          player: account.address,
+          player: account?.address ||"null",
           x: newPosition
         });
         
         setStepCount({
-          player: account.address,
+          player:account?.address ||"null",
           count: newStepCount
         });
         
@@ -181,36 +184,29 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
           });
         }
         
-        // Update entity spawn state
-        if (entitySpawnState) {
-          setEntitySpawnState({
-            ...entitySpawnState,
-            last_spawn_position: newPosition
-          });
-        }
-        
         // Clear any existing encounter
         if (currentEncounter) {
           setCurrentEncounter(null);
         }
         
-        // Add step taken event (this will auto-update stats)
+        // Add step taken event (this will auto-update stats and handle state)
         addStepTaken({
-          player: account.address,
+          player: account?.address ||"null",
           new_position: newPosition,
           step_count: newStepCount
         });
         
-        // Update game phase if needed
+        // Ensure we're in playing phase if successful
         if (gamePhase !== GamePhase.PLAYING) {
           setGamePhase(GamePhase.PLAYING);
         }
         
-        setStepForwardState(prev => ({
-          ...prev,
-          txStatus: 'SUCCESS',
-          isLoading: false
-        }));
+        setStepForwardState({
+          isLoading: false,
+          error: null,
+          txHash: tx.transaction_hash || null,
+          txStatus: 'SUCCESS'
+        });
 
         // Auto-clear success state after 3 seconds
         setTimeout(() => {
@@ -252,25 +248,24 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
         setError(null);
       }, 5000);
     } finally {
-      // Reset action state
+      // Reset action state - canTakeStep is now handled by addStepTaken
       setActionInProgress(false);
-      setCanTakeStep(true);
     }
   }, [
-    canStepForward,
     account,
+    status,
     client.actions,
     isPlayerInitialized,
-    isAlive,
+    health,
     overloadState,
     gamePhase,
     currentEncounter,
     position,
     stepCount,
     player,
-    entitySpawnState,
     canTakeStep,
     actionInProgress,
+    stepForwardState.isLoading,
     // Store actions
     setPosition,
     setStepCount,
@@ -278,7 +273,6 @@ export const useStepForwardAction = (): UseStepForwardActionReturn => {
     setGamePhase,
     setCanTakeStep,
     setCurrentEncounter,
-    setEntitySpawnState,
     setActionInProgress,
     setLastAction,
     setError,

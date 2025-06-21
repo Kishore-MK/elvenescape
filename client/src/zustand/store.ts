@@ -10,7 +10,6 @@ import {
   CurrentEncounter,
   Shrine,
   Gatekeeper,
-  EntitySpawnState,
   StepTaken,
   EncounterFound,
   GatekeeperBattle,
@@ -50,7 +49,6 @@ interface AppState {
   inventory: Inventory | null;
   overloadState: OverloadState | null;
   currentEncounter: CurrentEncounter | null;
-  entitySpawnState: EntitySpawnState | null;
 
   // World entities (cached)
   shrines: Map<string, Shrine>;
@@ -103,7 +101,6 @@ interface AppActions {
   addToInventory: (cosmetics?: number[], blessings?: number[]) => void;
   setOverloadState: (overloadState: OverloadState | null) => void;
   setCurrentEncounter: (encounter: CurrentEncounter | null) => void;
-  setEntitySpawnState: (spawnState: EntitySpawnState) => void;
 
   // World entity management
   setShrines: (shrines: Shrine[]) => void;
@@ -181,7 +178,6 @@ const initialState: AppState = {
   inventory: null,
   overloadState: null,
   currentEncounter: null,
-  entitySpawnState: null,
 
   // World entities
   shrines: new Map(),
@@ -285,8 +281,6 @@ const useAppStore = create<AppStore>()(
           currentEncounter: encounter,
           gamePhase: encounter ? GamePhase.ENCOUNTER : GamePhase.PLAYING,
         }),
-
-      setEntitySpawnState: (entitySpawnState) => set({ entitySpawnState }),
 
       // World entity management
       setShrines: (shrines) =>
@@ -563,7 +557,6 @@ const useAppStore = create<AppStore>()(
         health: state.health,
         inventory: state.inventory,
         overloadState: state.overloadState,
-        entitySpawnState: state.entitySpawnState,
 
         // Persist game state
         gamePhase: state.gamePhase,
