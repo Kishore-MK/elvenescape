@@ -1,0 +1,27 @@
+# The World address to index.
+world_address = "0x0212a371cbe6811255c517af1112db3882068ed8c0e1051ee7e883225d166d79"
+ 
+# Default RPC URL configuration
+rpc = "https://api.cartridge.gg/x/starknet/sepolia"
+
+# Indexing Options
+[indexing]
+allowed_origins = ["*"]
+transactions = true
+pending = true
+polling_interval = 1000
+contracts = []
+
+[events]
+raw = true
+
+[sql]
+historical = [
+  "kaadugame-Player",
+  "kaadugame-StepCount",
+  "kaadugame-Position",
+  "kaadugame-Inventory",
+  "kaadugame-Health",
+  "kaadugame-OverloadState",
+  "kaadugame-CurrentEncounter"
+]

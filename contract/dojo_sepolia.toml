@@ -1,0 +1,14 @@
+[world]
+name = "Kaadu Game"
+seed = "kaadugame3"
+
+[namespace]
+default = "kaadugame"
+
+[env]
+rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
+
+
+
+[writers]
+"kaadugame" = ["kaadugame-actions"]
