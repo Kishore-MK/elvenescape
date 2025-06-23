@@ -146,7 +146,7 @@ const Game: React.FC<GameProps> = ({ onReturnToMenu, audioControls }) => {
       {currentHealth <= 0 && (
         <div className="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
           <div className="text-center text-white">
-            <h2 className="text-4xl font-bold mb-4 text-red-500">Game Over</h2>
+            <h2 className="text-4xl font-bold mb-4 text-red-500">How did you die? Greed? Maybe!</h2>
             <p className="text-xl mb-2">Final Stats:</p>
             <p className="mb-1">Steps: {steps.toLocaleString()}</p>
             <p className="mb-1">Ego: {ego}</p>
