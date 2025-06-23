@@ -83,10 +83,10 @@ const GameUI: React.FC = () => {
         {/* Inventory */}
         <div className="flex gap-4">
           <div className="bg-black bg-opacity-60 px-3 py-2 rounded-lg border border-white border-opacity-30 drop-shadow-lg">
-            💎 Crystals: {inventory?.blessings?.length || 0}
+            💎 Blessings: {inventory?.blessings?.length || 0}
           </div>
           <div className="bg-black bg-opacity-60 px-3 py-2 rounded-lg border border-white border-opacity-30 drop-shadow-lg">
-            🏺 Artifacts: {inventory?.cosmetics?.length || 0}
+            🏺 Cosmetics: {inventory?.cosmetics?.length || 0}
           </div>
         </div>
       </div>
