@@ -2,7 +2,9 @@ import React, { useRef, useMemo, useState, useEffect } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { useInteractWithShrine } from "../dojo/hooks/useGameActions";
+import { useInteractWithShrine } from "../dojo/hooks/useGameActions"; 
+import { usePlayerStats } from "../dojo/hooks/usePlayerStats";
+import useAppStore, { GamePhase } from "../zustand/store";
 
 interface ShrineProps {
   position?: [number, number, number];
@@ -27,12 +29,16 @@ const Shrine: React.FC<ShrineProps> = ({
   const [isPlayerNear, setIsPlayerNear] = useState(false);
   const [isActivated, setIsActivated] = useState(false);
   const [showInteraction, setShowInteraction] = useState(false);
+  const [activationStartTime, setActivationStartTime] = useState<number | null>(null);
 
   const { scene } = useGLTF("/assets/extra/shrine.gltf");
 
+  const { refetch } = usePlayerStats();
   // Clone the scene to avoid issues with multiple instances
   const clonedScene = useMemo(() => scene.clone(), [scene]);
-
+  const {
+    setGamePhase
+  } = useAppStore();
   const interactWithShrine = useInteractWithShrine();
 
   // Enable shadows for all meshes in the model
@@ -59,16 +65,22 @@ const Shrine: React.FC<ShrineProps> = ({
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [showInteraction, isActivated]);
 
-  const handleActivate = async () => {
-    if (isActivated) return;
- await interactWithShrine.interactWithShrine(10n);
-    setIsActivated(true);
-    setShowInteraction(false);
-
-    console.log("Calling activate shrine");
-
-   
-  };
+ const handleActivate = async () => {
+  setGamePhase(GamePhase.AT_SHRINE)
+  // Set loading state to disable all interactions and start timer
+  setIsActivated(true);
+  setShowInteraction(false);
+  setActivationStartTime(Date.now());
+  
+  console.log("Calling activate shrine");
+  await interactWithShrine.interactWithShrine(10n);
+  
+  // Wait 5 seconds for the gold transition to complete
+  await new Promise(resolve => setTimeout(resolve, 4000));
+  await refetch();
+  await new Promise(resolve => setTimeout(resolve, 2000));
+   setGamePhase(GamePhase.WALKING)
+};
 
   // Add subtle floating animation, glow effects, and distance-based visibility
   useFrame((state) => {
@@ -104,25 +116,38 @@ const Shrine: React.FC<ShrineProps> = ({
     if (glowRef.current) {
       const material = glowRef.current.material as THREE.MeshBasicMaterial;
 
-      if (isActivated) {
-        // Activated state - bright golden glow
-        const intensity = 0.8 + Math.sin(state.clock.elapsedTime * 2) * 0.2;
-        material.opacity = intensity;
-        material.color.setHex(0xffd700); // Gold color
-      } else if (isPlayerNear) {
+      if (isActivated && activationStartTime) {
+        // Calculate transition progress (0 to 1 over 5 seconds)
+        const elapsed = Date.now() - activationStartTime;
+        const transitionProgress = Math.min(elapsed / 5000, 1); // 5000ms = 5 seconds
+        
+        // Interpolate between blue and gold based on progress
+        const startColor = new THREE.Color(0x00aaff); // Blue
+        const endColor = new THREE.Color(0xffd700);   // Gold
+        const currentColor = startColor.clone().lerp(endColor, transitionProgress);
+        
+        // Enhanced pulsing intensity during transition
+        const baseIntensity = 0.6 + (transitionProgress * 0.4); // Grows from 0.6 to 1.0
+        const pulseIntensity = baseIntensity + Math.sin(state.clock.elapsedTime * 2) * 0.2;
+        
+        material.opacity = pulseIntensity;
+        material.color.copy(currentColor);
+      } else if (isPlayerNear && !isActivated) {
         // Player nearby - pulsing blue glow
         const intensity = 0.4 + Math.sin(state.clock.elapsedTime * 3) * 0.2;
         material.opacity = intensity;
         material.color.setHex(0x00aaff); // Blue color
-      } else {
+      } else if (!isActivated) {
         // Default state - subtle white glow
         const intensity = 0.2 + Math.sin(state.clock.elapsedTime * 1) * 0.1;
         material.opacity = intensity;
         material.color.setHex(0xffffff); // White color
       }
 
-      // Scale glow effect
-      const scale = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.1;
+      // Scale glow effect - more dramatic during activation
+      const baseScale = isActivated ? 1.2 : 1;
+      const scaleVariation = isActivated ? 0.15 : 0.1;
+      const scale = baseScale + Math.sin(state.clock.elapsedTime * 2) * scaleVariation;
       glowRef.current.scale.setScalar(scale);
     }
   });
@@ -133,7 +158,7 @@ const Shrine: React.FC<ShrineProps> = ({
       // Create popup element
       const popup = document.createElement("div");
       popup.className =
-        "fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-blue-400 text-base font-bold z-50 flex items-center gap-2";
+        "fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-blue-400 text-base font-bold z-40 flex items-center gap-2";
       popup.innerHTML = `
         <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
         Press E to Activate Shrine

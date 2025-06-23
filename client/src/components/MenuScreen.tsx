@@ -45,7 +45,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ onStartGame, audioControls }) =
   } = useSpawnPlayer();
 
   // Get current game state from store
-  const { gamePhase: storeGamePhase, isPlayerInitialized } = useAppStore();
+  const { gamePhase: storeGamePhase,setGamePhase, isPlayerInitialized } = useAppStore();
 
   useEffect(() => { 
     audioControls.playLobby(); 
@@ -57,7 +57,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ onStartGame, audioControls }) =
   const actionInProgress = isInitializing || isSpawning;
   const hasError = playerError || spawnError || initError;
   const isLoading = isConnecting || status === "connecting" || isInitializing || isSpawning || playerLoading || actionInProgress;
-  const gamePhase = storeGamePhase || spawnGamePhase || GamePhase.UNINITIALIZED;
+   
 
   // Handle initialization
   const handleInitialize = useCallback(async () => {
@@ -83,6 +83,8 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ onStartGame, audioControls }) =
       try {
         const result = await spawnPlayer();
         if (result.success) {
+          setGamePhase(GamePhase.WALKING);
+      console.log("🎉 After spawned successfully!",storeGamePhase);
           onStartGame();
         } else {
           console.error("Failed to spawn player:", result.error);
@@ -105,7 +107,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ onStartGame, audioControls }) =
       };
     }
 
-    if (!isPlayerInitialized && gamePhase === GamePhase.UNINITIALIZED) {
+    if (!isPlayerInitialized && storeGamePhase === GamePhase.UNINITIALIZED) {
       return {
         text: "Initialize",
         icon: <Settings className="w-4 h-4" />,
@@ -189,7 +191,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ onStartGame, audioControls }) =
       >
         {/* Game Title */}
         <h1 className="text-6xl md:text-7xl font-bold text-white mb-5 font-orbitron tracking-widest bg-gradient-to-r from-white via-blue-200 to-white bg-clip-text text-transparent animate-pulse">
-          FOG WALKER
+          Elven Escape
         </h1>
 
         {/* Subtitle */}

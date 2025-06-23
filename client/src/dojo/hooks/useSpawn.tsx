@@ -62,9 +62,7 @@ export const useSpawnPlayer = () => {
 
   // Core spawn function
   const spawnPlayer = useCallback(async (): Promise<SpawnResult> => {
-    if (isProcessing) {
-      return { success: false, playerExists: false, error: "Already processing" };
-    }
+     
 
     const validationError = validateConnection();
     if (validationError) {
@@ -101,24 +99,19 @@ export const useSpawnPlayer = () => {
       // Wait for transaction processing
       console.log("⏳ Processing spawn transaction...");
       await new Promise(resolve => setTimeout(resolve, 3500));
-
-      // Refetch player data
-      console.log("🔄 Refetching player data...");
-      await refetchPlayer();
-      
-      // Additional wait to ensure store updates
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
+ 
       // Confirm transaction
       dojoState.confirmTransaction(transactionId);
       
       // Update final state
       setSpawnState({ status: 'success', error: null, txHash: spawnTx.transaction_hash });
+      console.log("🎉 Before spawned successfully!",gamePhase);
       setGamePhase(GamePhase.WALKING);
+      console.log("🎉 After spawned successfully!",gamePhase);
       setPlayerInitialized(true);
       setActionInProgress(false);
 
-      console.log("🎉 Player spawned successfully!");
+      
       
       return { 
         success: true, 

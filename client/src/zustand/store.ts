@@ -346,7 +346,10 @@ const useAppStore = create<AppStore>()(
         }),
 
       // Game state management
-      setGamePhase: (gamePhase) => set({ gamePhase }),
+      setGamePhase: (gamePhase) => {
+        console.log("setting gamephase");
+        
+        set({ gamePhase })},
       setPlayerInitialized: (isPlayerInitialized) => set({ isPlayerInitialized }),
 
       // Event handling (keep recent events for UI feedback)

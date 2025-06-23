@@ -4,11 +4,9 @@ import { useAccount } from "@starknet-react/core";
 import { Account, BigNumberish } from "starknet";
 import { useDojoSDK } from "@dojoengine/sdk/react";
 import { useStarknetConnect } from "./useStarknetConnect";
-import useAppStore from "../../zustand/store";
-import * as models from "../bindings";
-import { useInventory } from "./useInventory";
-import { usePlayerData } from "./usePlayerStats";
-import { useHealth } from "./useHealth";
+import useAppStore, { GamePhase } from "../../zustand/store";
+import * as models from "../bindings";  
+import { usePlayer } from "./usePlayer";
 
 // Random u64 BigNumberish generator
 const generateRandomU64 = (): BigNumberish => {
@@ -234,7 +232,7 @@ export const useAttackGatekeeper = () => {
   const dojoState = useDojoStore((state) => state);
   const { account } = useAccount();
   const { status: connectionStatus } = useStarknetConnect();
-
+const { refetch } = usePlayer();
   // Store state and actions
   const {
     setActionInProgress,
@@ -244,6 +242,7 @@ export const useAttackGatekeeper = () => {
     player,
     gameStats,
     actionInProgress,
+    setGamePhase
   } = useAppStore();
 
   // Local action state
@@ -271,10 +270,7 @@ export const useAttackGatekeeper = () => {
 
   // Core attack function
   const attackGatekeeper = useCallback(async (): Promise<ActionResult> => {
-    if (isProcessing || actionInProgress) {
-      return { success: false, error: "Action already in progress" };
-    }
-
+     setGamePhase(GamePhase.FIGHTING_GATEKEEPER)
     const validationError = validateConnection();
     if (validationError) {
       setActionState({
@@ -325,10 +321,10 @@ export const useAttackGatekeeper = () => {
       // Wait for transaction processing
       console.log("⏳ Processing attack transaction...");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-
+      await refetch();
       // Confirm transaction
       dojoState.confirmTransaction(transactionId);
-
+      console.log("current kills",player?.gatekeeper_kills);
       // Update final state
       setActionState({
         status: "success",
@@ -412,9 +408,6 @@ export const useInteractWithShrine = () => {
   const { account } = useAccount();
   const { status: connectionStatus } = useStarknetConnect();
 
-  const { refetchHealth } = useHealth();
-  const { refetchPlayerStats } = usePlayerData();
-  const { refetch } = useInventory();
   // Store state and actions
   const {
     setActionInProgress,
@@ -425,9 +418,7 @@ export const useInteractWithShrine = () => {
     player,
     gameStats,
     actionInProgress,
-    stepCount,
-    health,
-    inventory,
+    setGamePhase
   } = useAppStore();
 
   // Local action state
@@ -456,6 +447,7 @@ export const useInteractWithShrine = () => {
   // Core interact function - Fixed dependencies
   const interactWithShrine = useCallback(
     async (burnSteps: BigNumberish): Promise<ActionResult> => {
+      setGamePhase(GamePhase.AT_SHRINE)
       const validationError = validateConnection();
       if (validationError) {
         setActionState({
@@ -473,8 +465,7 @@ export const useInteractWithShrine = () => {
         // Start processing
         setActionState({ status: "processing", error: null, txHash: null });
         setActionInProgress(true);
-        setError(null);
-
+        setError(null); 
         console.log("🛕 Interacting with shrine...", {
           shrineId: shrineId.toString(),
           burnSteps: burnSteps.toString(), // Convert to string for logging
@@ -506,11 +497,6 @@ export const useInteractWithShrine = () => {
         // Wait for transaction processing
         console.log("⏳ Processing shrine interaction...");
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        
-         await refetchHealth();
-        // await refetchPlayerStats();
-        // await refetch();
-        console.log("current health",health?.current);
         
 
         // Confirm transaction

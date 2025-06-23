@@ -56,10 +56,11 @@ export const useStepForward = (): UseStepForwardReturn => {
     if (!isPlayerInitialized) return { valid: false, reason: "Player not initialized" };
     if (!health || Number(health.current) <= 0) return { valid: false, reason: "Player is dead" };
     if (overloadState?.is_active) return { valid: false, reason: "Overload active" };
+    
     if (actionInProgress || state.status === 'pending') return { valid: false, reason: "Action in progress" };
     
     // Game phase validation
-    const invalidPhases = [GamePhase.UNINITIALIZED, GamePhase.INITIALIZING, GamePhase.DEAD, GamePhase.OVERLOADED];
+    const invalidPhases = [GamePhase.UNINITIALIZED, GamePhase.INITIALIZING,GamePhase.AT_SHRINE,GamePhase.FIGHTING_GATEKEEPER, GamePhase.DEAD, GamePhase.OVERLOADED];
     if (invalidPhases.includes(gamePhase)) {
       return { valid: false, reason: `Invalid game state: ${gamePhase}` };
     }

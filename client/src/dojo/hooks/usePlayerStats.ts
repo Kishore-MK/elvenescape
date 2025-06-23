@@ -2,14 +2,33 @@ import { useEffect, useState, useCallback } from "react";
 import { useAccount } from "@starknet-react/core";
 import { addAddressPadding } from "starknet";
 import { dojoConfig } from "../dojoConfig";
-import { Player, Inventory } from '../bindings';
-import useAppStore from '../../zustand/store';
+import { 
+  Player, 
+  Position, 
+  StepCount, 
+  Health,
+  Inventory, 
+  OverloadState
+} from '../bindings';
+import useAppStore, { GamePhase } from '../../zustand/store';
+
+interface UsePlayerReturn {
+  player: Player | null;
+  position: Position | null;
+  stepCount: StepCount | null;
+  health: Health | null;
+  inventory: Inventory | null;
+  overloadState: OverloadState | null;
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+  gamePhase: GamePhase;  
+}
 
 const TORII_URL = dojoConfig.toriiUrl + "/graphql";
 
-// Player-specific query
-const PLAYER_DATA_QUERY = `
-  query GetPlayerData($playerAddress: ContractAddress!) {
+const PLAYER_QUERY = `
+  query GetPlayer($playerAddress: ContractAddress!) {
     kaadugamePlayerModels(where: {player: $playerAddress}) {
       edges {
         node {
@@ -25,9 +44,52 @@ const PLAYER_DATA_QUERY = `
         }
       }
     }
+    kaadugamePositionModels(where: { player: $playerAddress }) {
+      edges {
+        node {
+          player
+          x
+        }
+      }
+    }
+    kaadugameStepCountModels(where: { player: $playerAddress }) {
+      edges {
+        node {
+          player
+          count
+        }
+      }
+    }
+    kaadugameHealthModels(where: { player: $playerAddress }) {
+      edges {
+        node {
+          player
+          current
+          max
+        }
+      }
+    }
+    kaadugameInventoryModels(where: { player: $playerAddress }) {
+      edges {
+        node {
+          player
+          cosmetics
+          blessings
+        }
+      }
+    }
+    kaadugameOverloadStateModels(where: { player: $playerAddress }) {
+      edges {
+        node {
+          player
+          is_active
+          steps_remaining
+        }
+      }
+    }
   }
 `;
- 
+
 // Utility functions
 const parseNumber = (value: any): number => {
   if (typeof value === 'number') return value;
@@ -37,26 +99,20 @@ const parseNumber = (value: any): number => {
   return 0;
 };
 
-
-
-// Player Data Hook
-interface UsePlayerDataReturn {
-  player: Player | null;
-  isLoading: boolean;
-  error: string | null;
-  refetchPlayerStats: () => Promise<void>;
-}
+const parseNumberArray = (arr: any[]): number[] => {
+  return Array.isArray(arr) ? arr.map(parseNumber) : [];
+};
 
 const fetchPlayerData = async (playerAddress: string) => {
   const response = await fetch(TORII_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 
-      query: PLAYER_DATA_QUERY,
+      query: PLAYER_QUERY,
       variables: { playerAddress }
     }),
-  });
-
+  }); 
+  
   if (!response.ok) {
     throw new Error(`GraphQL request failed: ${response.status}`);
   }
@@ -68,38 +124,87 @@ const fetchPlayerData = async (playerAddress: string) => {
   }
 
   const data = result.data;
-  if (!data) return null;
+  if (!data) return null; 
 
+  // Extract nodes from GraphQL response
   const playerNode = data.kaadugamePlayerModels?.edges?.[0]?.node;
+  const positionNode = data.kaadugamePositionModels?.edges?.[0]?.node;
+  const stepCountNode = data.kaadugameStepCountModels?.edges?.[0]?.node;
+  const healthNode = data.kaadugameHealthModels?.edges?.[0]?.node;
+  const inventoryNode = data.kaadugameInventoryModels?.edges?.[0]?.node;
+  const overloadNode = data.kaadugameOverloadStateModels?.edges?.[0]?.node;
 
-  return playerNode ? {
-    player: playerAddress,
-    steps: parseNumber(playerNode.steps),
-    encounters: parseNumber(playerNode.encounters),
-    ego: parseNumber(playerNode.ego),
-    gatekeeper_kills: parseNumber(playerNode.gatekeeper_kills),
-    deaths: parseNumber(playerNode.deaths),
-    traps_triggered: parseNumber(playerNode.traps_triggered),
-    cosmetics_unlocked: parseNumber(playerNode.cosmetics_unlocked),
-    greed_marked: Boolean(playerNode.greed_marked)
-  } as Player : null;
+  return {
+    player: playerNode ? {
+      player: playerAddress,
+      steps: parseNumber(playerNode.steps),
+      encounters: parseNumber(playerNode.encounters),
+      ego: parseNumber(playerNode.ego),
+      gatekeeper_kills: parseNumber(playerNode.gatekeeper_kills),
+      deaths: parseNumber(playerNode.deaths),
+      traps_triggered: parseNumber(playerNode.traps_triggered),
+      cosmetics_unlocked: parseNumber(playerNode.cosmetics_unlocked),
+      greed_marked: Boolean(playerNode.greed_marked)
+    } as Player : null,
+
+    position: positionNode ? {
+      player: playerAddress,
+      x: parseNumber(positionNode.x)
+    } as Position : null,
+
+    stepCount: stepCountNode ? {
+      player: playerAddress,
+      count: parseNumber(stepCountNode.count)
+    } as StepCount : null,
+
+    health: healthNode ? {
+      player: playerAddress,
+      current: parseNumber(healthNode.current),
+      max: parseNumber(healthNode.max)
+    } as Health : null,
+
+    inventory: inventoryNode ? {
+      player: playerAddress,
+      cosmetics: parseNumberArray(inventoryNode.cosmetics || []),
+      blessings: parseNumberArray(inventoryNode.blessings || [])
+    } as Inventory : null,
+
+    overloadState: overloadNode ? {
+      player: playerAddress,
+      is_active: Boolean(overloadNode.is_active),
+      steps_remaining: parseNumber(overloadNode.steps_remaining)
+    } as OverloadState : null
+  };
 };
 
-export const usePlayerData = (): UsePlayerDataReturn => {
+export const usePlayerStats = (): UsePlayerReturn => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { account } = useAccount();
   
+  // Store state and actions
   const {
     player,
+    position,
+    stepCount,
+    health,
+    inventory,
+    overloadState,
+    gamePhase,
     setPlayer,
+    setPosition,
+    setStepCount,
+    setHealth,
+    setInventory,
+    setOverloadState,
     setLoading,
-    setError: setStoreError
+    setError: setStoreError,
+    resetGame
   } = useAppStore();
 
   const userAddress = account ? addAddressPadding(account.address).toLowerCase() : '';
 
-  const refetchPlayerStats = useCallback(async () => {
+  const refetch = useCallback(async () => {
     if (!userAddress) {
       setIsLoading(false);
       setLoading(false);
@@ -112,8 +217,25 @@ export const usePlayerData = (): UsePlayerDataReturn => {
       setError(null);
       setStoreError(null);
 
-      const playerData = await fetchPlayerData(userAddress);
-      setPlayer(playerData);
+      const data = await fetchPlayerData(userAddress);
+      
+      if (data) {
+        // Update store with fetched data
+        setPlayer(data.player);
+        setPosition(data.position);
+        setStepCount(data.stepCount);
+        setHealth(data.health);
+        setInventory(data.inventory);
+        setOverloadState(data.overloadState);
+      } else {
+        // No player data found - reset to initial state
+        setPlayer(null);
+        setPosition(null);
+        setStepCount(null);
+        setHealth(null);
+        setInventory(null);
+        setOverloadState(null);
+      }
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch player data';
@@ -124,31 +246,37 @@ export const usePlayerData = (): UsePlayerDataReturn => {
       setIsLoading(false);
       setLoading(false);
     }
-  }, [userAddress, setPlayer, setLoading, setStoreError]);
+  }, [userAddress, setPlayer, setPosition, setStepCount, setHealth, setInventory, setOverloadState, setLoading, setStoreError]);
 
   // Fetch data when address changes
   useEffect(() => {
     if (userAddress) {
-      refetchPlayerStats();
+      refetch();
     } else {
       setIsLoading(false);
       setLoading(false);
     }
-  }, [userAddress, refetchPlayerStats]);
+  }, [userAddress, refetch]);
 
   // Reset when account disconnects
   useEffect(() => {
     if (!account) {
-      setPlayer(null);
+      resetGame();
       setError(null);
       setIsLoading(false);
     }
-  }, [account, setPlayer]);
+  }, [account, resetGame]);
 
   return {
     player,
+    position,
+    stepCount,
+    health,
+    inventory,
+    overloadState,
     isLoading,
     error,
-    refetchPlayerStats
+    refetch,
+    gamePhase,  
   };
 };

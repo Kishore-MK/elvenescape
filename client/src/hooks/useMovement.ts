@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-
+import useAppStore, { GamePhase } from '../zustand/store';
+ 
 interface MovementState {
   position: THREE.Vector3;
   isMoving: boolean;
@@ -14,6 +15,9 @@ export const useMovement = (speed: number = 5, onStep?: () => void): MovementSta
   const lastPosition = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
   const stepThreshold = 0.5; // Distance threshold to count as a step
   const distanceAccumulator = useRef<number>(0);
+
+  // Get game state from store 
+  const gamePhase = useAppStore(state => state.gamePhase);
 
   // Handle keyboard events
   useEffect(() => {
@@ -42,6 +46,13 @@ export const useMovement = (speed: number = 5, onStep?: () => void): MovementSta
     let moveZ = 0;
     let moving = false;
 
+    // Check if movement is allowed based on game state
+    if (gamePhase!==GamePhase.WALKING) {
+      setIsMoving(false);
+      return;
+    }
+ 
+
     // Check movement keys
     if (keys['w']) {
       moveZ += speed * delta;
@@ -50,7 +61,7 @@ export const useMovement = (speed: number = 5, onStep?: () => void): MovementSta
     if (keys['s']) {
       moveZ -= speed * delta;
       moving = true;
-    } 
+    }
 
     setIsMoving(moving);
 
