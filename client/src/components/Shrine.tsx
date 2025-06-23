@@ -79,7 +79,8 @@ const Shrine: React.FC<ShrineProps> = ({
   await new Promise(resolve => setTimeout(resolve, 4000));
   await refetch();
   await new Promise(resolve => setTimeout(resolve, 2000));
-   setGamePhase(GamePhase.WALKING)
+  setGamePhase(GamePhase.WALKING);
+  setIsActivated(false); // Reset activation state
 };
 
   // Add subtle floating animation, glow effects, and distance-based visibility
@@ -154,15 +155,24 @@ const Shrine: React.FC<ShrineProps> = ({
 
   // Use effect to handle popup outside of Three.js context
   useEffect(() => {
-    if (showInteraction && !isActivated) {
+    if (showInteraction || isActivated) {
       // Create popup element
       const popup = document.createElement("div");
       popup.className =
         "fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-blue-400 text-base font-bold z-40 flex items-center gap-2";
-      popup.innerHTML = `
-        <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-        Press E to Activate Shrine
-      `;
+      
+      if (isActivated) {
+        popup.innerHTML = `
+          <div class="w-2 h-2 bg-gold-400 rounded-full animate-pulse"></div>
+          Activating Shrine...
+        `;
+      } else {
+        popup.innerHTML = `
+          <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+          Press E to Activate Shrine
+        `;
+      }
+      
       popup.id = "shrine-interaction-popup";
 
       document.body.appendChild(popup);
@@ -200,4 +210,4 @@ const Shrine: React.FC<ShrineProps> = ({
 // Preload the model for better performance
 useGLTF.preload("/assets/extra/shrine.gltf");
 
-export default Shrine;
+export default Shrine;  
