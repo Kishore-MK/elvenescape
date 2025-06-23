@@ -16,8 +16,7 @@ import {
   OverloadTriggered,
   TrapTriggered,
   HealthDamage,
-} from "../dojo/bindings";
-import { BigNumberish } from "starknet";
+} from "../dojo/bindings"; 
 
 // Game state enums
 enum GamePhase {

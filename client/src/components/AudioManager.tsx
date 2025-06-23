@@ -121,7 +121,7 @@ export const useAudioManager = (): AudioControls => {
       }
 
       // Play game music
-      await gameAudioRef.current.play();
+      // await gameAudioRef.current.play();
       setCurrentState('game');
     } catch (error) {
       console.warn('Failed to play game music:', error);

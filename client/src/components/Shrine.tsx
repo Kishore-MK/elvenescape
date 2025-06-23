@@ -1,31 +1,25 @@
-import React, { useRef, useMemo, useState, useEffect } from 'react';
-import { useGLTF } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import React, { useRef, useMemo, useState, useEffect } from "react";
+import { useGLTF } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+import { useInteractWithShrine } from "../dojo/hooks/useGameActions";
 
-// Mock external function - replace with your actual import
-// import { activateShrine } from './gameState'; // Your actual import
-const activateShrine = (shrineId: string | number) => {
-  console.log(`Shrine ${shrineId} activated!`);
-  // Update game state, unlock abilities, play sound, etc.
-};
-
-interface ShrineProps { 
+interface ShrineProps {
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: number | [number, number, number];
   visible?: boolean;
   playerPosition?: THREE.Vector3;
-  triggerDistance?: 3;
+  triggerDistance?: number;
 }
 
-const Shrine: React.FC<ShrineProps> = ({  
-  position = [0, 0, 0], 
-  rotation = [0, 9, 0], 
+const Shrine: React.FC<ShrineProps> = ({
+  position = [0, 0, 0],
+  rotation = [0, 9, 0],
   scale = 0.6,
   visible = true,
   playerPosition,
-  triggerDistance = 4
+  triggerDistance = 4,
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const glowRef = useRef<THREE.Mesh>(null);
@@ -34,10 +28,12 @@ const Shrine: React.FC<ShrineProps> = ({
   const [isActivated, setIsActivated] = useState(false);
   const [showInteraction, setShowInteraction] = useState(false);
 
-  const { scene } = useGLTF('/assets/extra/shrine.gltf');
+  const { scene } = useGLTF("/assets/extra/shrine.gltf");
 
   // Clone the scene to avoid issues with multiple instances
   const clonedScene = useMemo(() => scene.clone(), [scene]);
+
+  const interactWithShrine = useInteractWithShrine();
 
   // Enable shadows for all meshes in the model
   useEffect(() => {
@@ -52,45 +48,47 @@ const Shrine: React.FC<ShrineProps> = ({
   // Handle keyboard input for activation
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      if (event.key === 'e' || event.key === 'E') {
+      if (event.key === "e" || event.key === "E") {
         if (showInteraction && !isActivated) {
           handleActivate();
         }
       }
     };
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
   }, [showInteraction, isActivated]);
 
-  const handleActivate = () => {
-    if (isActivated) return; // Prevent multiple activations
-    
+  const handleActivate = async () => {
+    if (isActivated) return;
+ await interactWithShrine.interactWithShrine(10n);
     setIsActivated(true);
     setShowInteraction(false);
-    
-    // Call the external function directly
-    activateShrine("id");
+
+    console.log("Calling activate shrine");
+
+   
   };
 
   // Add subtle floating animation, glow effects, and distance-based visibility
   useFrame((state) => {
     if (groupRef.current) {
       // Floating animation
-      groupRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 0.5) * 0.1;
-      
+      groupRef.current.position.y =
+        position[1] + Math.sin(state.clock.elapsedTime * 0.5) * 0.1;
+
       // Distance-based visibility and interaction
       if (playerPosition) {
         groupRef.current.getWorldPosition(playerWorldPosition.current);
         const distance = playerWorldPosition.current.distanceTo(playerPosition);
-        
+
         // Update visibility based on distance (7 steps)
         groupRef.current.visible = visible && distance <= 7;
-        
+
         // Update isPlayerNear state based on trigger distance
         const wasPlayerNear = isPlayerNear;
         const nowPlayerNear = distance <= triggerDistance;
-        
+
         if (wasPlayerNear !== nowPlayerNear) {
           setIsPlayerNear(nowPlayerNear);
           setShowInteraction(nowPlayerNear && !isActivated);
@@ -105,7 +103,7 @@ const Shrine: React.FC<ShrineProps> = ({
     // Animate glow effect
     if (glowRef.current) {
       const material = glowRef.current.material as THREE.MeshBasicMaterial;
-      
+
       if (isActivated) {
         // Activated state - bright golden glow
         const intensity = 0.8 + Math.sin(state.clock.elapsedTime * 2) * 0.2;
@@ -122,7 +120,7 @@ const Shrine: React.FC<ShrineProps> = ({
         material.opacity = intensity;
         material.color.setHex(0xffffff); // White color
       }
-      
+
       // Scale glow effect
       const scale = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.1;
       glowRef.current.scale.setScalar(scale);
@@ -133,18 +131,21 @@ const Shrine: React.FC<ShrineProps> = ({
   useEffect(() => {
     if (showInteraction && !isActivated) {
       // Create popup element
-      const popup = document.createElement('div');
-      popup.className = 'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-blue-400 text-base font-bold z-50 flex items-center gap-2';
+      const popup = document.createElement("div");
+      popup.className =
+        "fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-blue-400 text-base font-bold z-50 flex items-center gap-2";
       popup.innerHTML = `
         <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
         Press E to Activate Shrine
       `;
-      popup.id = 'shrine-interaction-popup';
-      
+      popup.id = "shrine-interaction-popup";
+
       document.body.appendChild(popup);
-      
+
       return () => {
-        const existingPopup = document.getElementById('shrine-interaction-popup');
+        const existingPopup = document.getElementById(
+          "shrine-interaction-popup"
+        );
         if (existingPopup) {
           document.body.removeChild(existingPopup);
         }
@@ -156,11 +157,11 @@ const Shrine: React.FC<ShrineProps> = ({
     <group ref={groupRef} position={position} rotation={rotation} scale={scale}>
       {/* Main shrine model */}
       <primitive object={clonedScene} />
-      
+
       {/* Glow effect */}
       <mesh ref={glowRef} position={[0, 0.84, 0]}>
         <sphereGeometry args={[0.07, 8, 8]} />
-        <meshBasicMaterial 
+        <meshBasicMaterial
           color={0xffffff}
           transparent={true}
           opacity={0.3}
@@ -171,22 +172,7 @@ const Shrine: React.FC<ShrineProps> = ({
   );
 };
 
-// Mock usage example:
-/*
-<Shrine id="shrine_1" position={[10, 0, 10]} />
-<Shrine id="shrine_2" position={[-10, 0, 10]} />
-
-// Your actual gameState.js file would export:
-export const activateShrine = (shrineId) => {
-  // Update global state, unlock abilities, etc.
-  gameState.activatedShrines.add(shrineId);
-  gameState.playerAbilities.push('new_power');
-  playActivationSound();
-  spawnMagicParticles();
-};
-*/
-
 // Preload the model for better performance
-useGLTF.preload('/assets/extra/shrine.gltf');
+useGLTF.preload("/assets/extra/shrine.gltf");
 
 export default Shrine;

@@ -1,16 +1,16 @@
 import React from 'react';
+import { Inventory } from '../dojo/bindings';
 
 interface GameUIProps {
   health: number;
   ego: number;
   steps: number;
-  inventory: {
-    crystals: number;
-    artifacts: number;
-  };
+  inventory: Inventory | null;
+  kills: number;
+  encounters: number;
 }
 
-const GameUI: React.FC<GameUIProps> = ({ health, ego, steps, inventory }) => {
+const GameUI: React.FC<GameUIProps> = ({ health, ego, steps, inventory, kills, encounters }) => {
   const healthPercentage = Math.max(0, Math.min(100, health));
   const egoPercentage = Math.max(0, Math.min(100, ego / 2)); // Divide by 2 since max is 200
 
@@ -30,7 +30,7 @@ const GameUI: React.FC<GameUIProps> = ({ health, ego, steps, inventory }) => {
             ❤️ Health: {health}/100
           </div>
           <div className="w-[200px] h-5 bg-white bg-opacity-20 border-2 border-white border-opacity-50 rounded-lg overflow-hidden">
-            <div 
+            <div
               className={`h-full transition-all duration-300 ease-in-out ${getHealthColor()}`}
               style={{ width: `${healthPercentage}%` }}
             />
@@ -43,7 +43,7 @@ const GameUI: React.FC<GameUIProps> = ({ health, ego, steps, inventory }) => {
             🌟 Ego: {ego}/200
           </div>
           <div className="w-[200px] h-5 bg-white bg-opacity-20 border-2 border-white border-opacity-50 rounded-lg overflow-hidden">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-purple-600 to-pink-600 transition-all duration-300 ease-in-out"
               style={{ width: `${egoPercentage}%` }}
             />
@@ -52,19 +52,29 @@ const GameUI: React.FC<GameUIProps> = ({ health, ego, steps, inventory }) => {
       </div>
 
       {/* Stats Row */}
-      <div className="flex gap-8 text-base font-bold">
+      <div className="flex gap-4 text-base font-bold flex-wrap">
         {/* Steps Counter */}
         <div className="bg-black bg-opacity-60 px-3 py-2 rounded-lg border border-white border-opacity-30 drop-shadow-lg">
           👣 Steps: {steps.toLocaleString()}
         </div>
 
+        {/* Kills Counter */}
+        <div className="bg-black bg-opacity-60 px-3 py-2 rounded-lg border border-white border-opacity-30 drop-shadow-lg">
+          ⚔️ Kills: {kills}
+        </div>
+
+        {/* Encounters Counter */}
+        <div className="bg-black bg-opacity-60 px-3 py-2 rounded-lg border border-white border-opacity-30 drop-shadow-lg">
+          👁️ Encounters: {encounters}
+        </div>
+
         {/* Inventory */}
         <div className="flex gap-4">
           <div className="bg-black bg-opacity-60 px-3 py-2 rounded-lg border border-white border-opacity-30 drop-shadow-lg">
-            💎 Crystals: {inventory.crystals}
+            💎 Crystals: {inventory?.blessings.length || 0}
           </div>
           <div className="bg-black bg-opacity-60 px-3 py-2 rounded-lg border border-white border-opacity-30 drop-shadow-lg">
-            🏺 Artifacts: {inventory.artifacts}
+            🏺 Artifacts: {inventory?.cosmetics.length || 0}
           </div>
         </div>
       </div>

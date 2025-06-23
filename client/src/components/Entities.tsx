@@ -14,9 +14,11 @@ interface EntitiesProps {
   enemyScale?: [number, number, number];
   triggerDistance?: number;
   onDamage?: (amount: number) => void;
-  onKillReward?: (egoAmount: number) => void;
+  onKillReward?: () => void;
+  onActivateShrine?: () => void; // Add this line
   damagePerSecond?: number;
 }
+
 
 const Entities: React.FC<EntitiesProps> = ({
   shrineCount = 2,
@@ -30,6 +32,7 @@ const Entities: React.FC<EntitiesProps> = ({
   triggerDistance = 5,
   onDamage,
   onKillReward,
+  onActivateShrine,
   damagePerSecond = 10,
 }) => {
   const { position } = useMovement(5);
@@ -64,15 +67,15 @@ const Entities: React.FC<EntitiesProps> = ({
   return (
     <>
       {entities.shrines.map((shrine) => (
-        <Shrine
-          key={`shrine-${shrine.id}`}
-          position={shrine.position}
-          rotation={[0, shrine.rotation, 0]}
-          scale={shrineScale}
-          visible={showShrine}
-          playerPosition={position}
-        />
-      ))}
+    <Shrine
+      key={`shrine-${shrine.id}`}
+      position={shrine.position}
+      rotation={[0, shrine.rotation, 0]}
+      scale={shrineScale}
+      visible={showShrine}
+      playerPosition={position} 
+    />
+  ))}
       {entities.enemies.map((enemy) => (
         <Enemy
           key={`enemy-${enemy.id}`}
@@ -81,8 +84,7 @@ const Entities: React.FC<EntitiesProps> = ({
           triggerDistance={triggerDistance}
           scale={enemyScale}
           visible={showEnemy}
-          onDamage={onDamage}
-          onKillReward={onKillReward}
+          onDamage={onDamage} 
           damagePerSecond={damagePerSecond}
         />
       ))}

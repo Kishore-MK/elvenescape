@@ -6,6 +6,9 @@ import { useDojoSDK } from "@dojoengine/sdk/react";
 import { useStarknetConnect } from "./useStarknetConnect";
 import useAppStore from "../../zustand/store";
 import * as models from "../bindings";
+import { useInventory } from "./useInventory";
+import { usePlayerData } from "./usePlayerStats";
+import { useHealth } from "./useHealth";
 
 // Random u64 BigNumberish generator
 const generateRandomU64 = (): BigNumberish => {
@@ -24,80 +27,6 @@ interface ActionResult {
   transactionHash?: string;
   error?: string;
 }
-
-// Hook for creating gatekeeper in store
-export const useCreateGatekeeper = () => {
-  const { updateGatekeeper } = useAppStore();
-
-  const createGatekeeper = useCallback(
-    (
-      position: BigNumberish,
-      health: BigNumberish = 100,
-      damage: BigNumberish = 10
-    ): string => {
-      const gatekeeperId = generateRandomU64();
-
-      const newGatekeeper: models.Gatekeeper = {
-        gatekeeper_id: gatekeeperId,
-        position: position,
-        health: health,
-        max_health: 100,
-        strength: damage,
-        spawn_step: position,
-      };
-
-      updateGatekeeper(newGatekeeper);
-      console.log("🛡️ Created gatekeeper:", newGatekeeper);
-
-      return gatekeeperId.toString();
-    },
-    [updateGatekeeper]
-  );
-
-  return { createGatekeeper };
-};
-
-// Hook for creating shrine in store
-export const useCreateShrine = () => {
-  const { updateShrine } = useAppStore();
-
-  const createShrine = useCallback(
-    (
-      position: BigNumberish,
-      blessing?: BigNumberish,
-      cosmetic?: BigNumberish,
-      isTrap: boolean = false
-    ): string => {
-      const shrineId = generateRandomU64();
-
-      const newShrine: models.Shrine = {
-        shrine_id: shrineId,
-        position: position,
-        blessing: blessing || 0,
-        cosmetic: {
-          isSome: () => cosmetic !== undefined,
-          isNone: () => cosmetic === undefined,
-          unwrap: () => cosmetic || 0,
-        },
-        is_active: true,
-        is_trap: isTrap,
-      };
-
-      updateShrine(newShrine);
-      console.log("🛕 Created shrine:", {
-        id: shrineId,
-        position,
-        blessing,
-        isTrap,
-      });
-
-      return shrineId.toString();
-    },
-    [updateShrine]
-  );
-
-  return { createShrine };
-};
 
 // Hook for taking damage
 export const useTakeDamage = () => {
@@ -196,7 +125,7 @@ export const useTakeDamage = () => {
           0,
           Number(health?.current) - Number(damage)
         );
-        
+
         const healthDamageEvent: models.HealthDamage = {
           player: player?.player || "0x0",
           damage: damage,
@@ -306,115 +235,73 @@ export const useAttackGatekeeper = () => {
   const { account } = useAccount();
   const { status: connectionStatus } = useStarknetConnect();
 
-  // // Store state and actions
-  // const {
-  //   setActionInProgress,
-  //   setError,
-  //   setLastTransaction,
-  //   addGatekeeperBattle,
-  //   updateGatekeeper,
-  //   canAttackGatekeeper,
-  //   getGatekeeperAtPosition,
-  //   player,
-  //   position,
-  //   gameStats,
-  //   actionInProgress,
-  // } = useAppStore();
+  // Store state and actions
+  const {
+    setActionInProgress,
+    setError,
+    setLastTransaction,
+    canAttackGatekeeper,
+    player,
+    gameStats,
+    actionInProgress,
+  } = useAppStore();
 
-  // // Local action state
-  // const [actionState, setActionState] = useState<ActionState>({
-  //   status: "idle",
-  //   error: null,
-  //   txHash: null,
-  // });
+  // Local action state
+  const [actionState, setActionState] = useState<ActionState>({
+    status: "idle",
+    error: null,
+    txHash: null,
+  });
 
-  // // Get current gatekeeper based on player position
-  // const getCurrentGatekeeper = useCallback(() => {
-  //   console.log("before position check",position);
-    
-  //   if (!position) return null;
-  //   return getGatekeeperAtPosition(Number(position.x));
-  // }, [position, getGatekeeperAtPosition]);
+  // Validation helpers
+  const validateConnection = useCallback((): string | null => {
+    if (connectionStatus !== "connected") {
+      return "Wallet not connected. Please connect your wallet first.";
+    }
+    if (!account) {
+      return "No account found. Please connect your wallet.";
+    }
+    if (!player) {
+      return "Player not initialized";
+    }
+    return null;
+  }, [connectionStatus, account, player]);
 
-  // // Validation helpers
-  // const validateConnection = useCallback((): string | null => {
-  //   if (connectionStatus !== "connected") {
-  //     return "Wallet not connected. Please connect your wallet first.";
-  //   }
-  //   if (!account) {
-  //     return "No account found. Please connect your wallet.";
-  //   }
-  //   if (!player) {
-  //     return "Player not initialized";
-  //   }
-  //   return null;
-  // }, [connectionStatus, account, player]);
-
-  // const validateAttack = useCallback((): string | null => {
-  //   if (!canAttackGatekeeper()) {
-  //     return "Cannot attack gatekeeper at this time";
-  //   }
-
-  //   const currentGatekeeper = getCurrentGatekeeper();
-    
-  //   // if (!currentGatekeeper) {
-  //   //   return "No gatekeeper found at current position";
-  //   // }
-
-  //   if (Number(currentGatekeeper?.health) <= 0) {
-  //     return "Gatekeeper is already defeated";
-  //   }
-
-  //   return null;
-  // }, [canAttackGatekeeper, getCurrentGatekeeper]);
-
-  // const isProcessing = actionState.status === "processing";
+  const isProcessing = actionState.status === "processing";
 
   // Core attack function
   const attackGatekeeper = useCallback(async (): Promise<ActionResult> => {
-    // if (isProcessing || actionInProgress) {
-    //   return { success: false, error: "Action already in progress" };
-    // }
+    if (isProcessing || actionInProgress) {
+      return { success: false, error: "Action already in progress" };
+    }
 
-    // const validationError = validateConnection();
-    // if (validationError) {
-    //   setActionState({
-    //     status: "error",
-    //     error: validationError,
-    //     txHash: null,
-    //   });
-    //   return { success: false, error: validationError };
-    // }
+    const validationError = validateConnection();
+    if (validationError) {
+      setActionState({
+        status: "error",
+        error: validationError,
+        txHash: null,
+      });
+      return { success: false, error: validationError };
+    }
 
-    // const attackError = validateAttack();
-    // if (attackError) {
-    //   setActionState({ status: "error", error: attackError, txHash: null });
-    //   return { success: false, error: attackError };
-    // }
+    const transactionId = uuidv4();
 
-    // const transactionId = uuidv4();
-    // const currentGatekeeper = getCurrentGatekeeper()!;
-
-    
-    // const gatekeeperId = currentGatekeeper.gatekeeper_id;
-    // const gatekeeperDamage=currentGatekeeper.max_health
-
-
-    
     try {
       // Start processing
-      // setActionState({ status: "processing", error: null, txHash: null });
-      // setActionInProgress(true);
-      // setError(null);
+      setActionState({ status: "processing", error: null, txHash: null });
+      setActionInProgress(true);
+      setError(null);
+      const gatekeeperId = generateRandomU64();
+      const gatekeeperDamage = 100;
 
-      // console.log("⚔️ Attacking gatekeeper...", {
-      //   gatekeeperId: gatekeeperId.toString(),
-      // });
-      // console.log("currentGatekeeper ",gatekeeperId,
-      //   gatekeeperDamage);
+      console.log("⚔️ Attacking gatekeeper...", {
+        gatekeeperId: gatekeeperId.toString(),
+      });
+      console.log("currentGatekeeper ", gatekeeperId, gatekeeperDamage);
+
       // Execute attack transaction
-      const gatekeeperId=5387629831708980;
-      const gatekeeperDamage=100
+
       const attackTx = await client.actions.attackGatekeeper(
         account as Account,
         gatekeeperId,
@@ -422,62 +309,37 @@ export const useAttackGatekeeper = () => {
       );
       console.log("📥 Attack transaction:", attackTx);
 
-      // if (!attackTx || attackTx.code !== "SUCCESS") {
-      //   throw new Error(
-      //     `Attack gatekeeper failed: ${attackTx?.code || "Unknown error"}`
-      //   );
-      // }
+      if (!attackTx || attackTx.code !== "SUCCESS") {
+        throw new Error(
+          `Attack gatekeeper failed: ${attackTx?.code || "Unknown error"}`
+        );
+      }
 
-      // // Update state with transaction hash
-      // setActionState((prev) => ({
-      //   ...prev,
-      //   txHash: attackTx.transaction_hash,
-      // }));
-      // setLastTransaction(attackTx.transaction_hash);
+      // Update state with transaction hash
+      setActionState((prev) => ({
+        ...prev,
+        txHash: attackTx.transaction_hash,
+      }));
+      setLastTransaction(attackTx.transaction_hash);
 
-      // // Optimistic update
-      // const damageDealt = Math.max(1, gameStats.currentEgo);
-      // const newGatekeeperHealth = Math.max(
-      //   0,
-      //   Number(currentGatekeeper.health) - damageDealt
-      // );
-      // const gatekeeperDefeated = newGatekeeperHealth <= 0;
+      // Wait for transaction processing
+      console.log("⏳ Processing attack transaction...");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // const battleEvent: models.GatekeeperBattle = {
-      //   player: player?.player || "0x0",
-      //   gatekeeper_id: currentGatekeeper.gatekeeper_id,
-      //   damage_dealt: damageDealt,
-      //   gatekeeper_defeated: gatekeeperDefeated,
-      // };
+      // Confirm transaction
+      dojoState.confirmTransaction(transactionId);
 
-      // addGatekeeperBattle(battleEvent);
+      // Update final state
+      setActionState({
+        status: "success",
+        error: null,
+        txHash: attackTx.transaction_hash,
+      });
+      setActionInProgress(false);
 
-      // const updatedGatekeeper: models.Gatekeeper = {
-      //   ...currentGatekeeper,
-      //   health: newGatekeeperHealth,
-      // };
-      // updateGatekeeper(updatedGatekeeper);
-
-      // // Wait for transaction processing
-      // console.log("⏳ Processing attack transaction...");
-      // await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // // Confirm transaction
-      // dojoState.confirmTransaction(transactionId);
-
-      // // Update final state
-      // setActionState({
-      //   status: "success",
-      //   error: null,
-      //   txHash: attackTx.transaction_hash,
-      // });
-      // setActionInProgress(false);
-
-      // console.log("⚔️ Attack successful!", {
-      //   damageDealt,
-      //   newHealth: newGatekeeperHealth,
-      //   defeated: gatekeeperDefeated,
-      // });
+      console.log("⚔️ Attack successful!", {
+        gatekeeperId,
+      });
 
       return {
         success: true,
@@ -492,59 +354,54 @@ export const useAttackGatekeeper = () => {
       console.error("❌ Attack gatekeeper error:", error);
 
       // Cleanup on error
-      // dojoState.revertOptimisticUpdate(transactionId);
-      // setActionState({ status: "error", error: errorMessage, txHash: null });
-      // setError(errorMessage);
-      // setActionInProgress(false);
+      dojoState.revertOptimisticUpdate(transactionId);
+      setActionState({ status: "error", error: errorMessage, txHash: null });
+      setError(errorMessage);
+      setActionInProgress(false);
 
       return { success: false, error: errorMessage };
     }
   }, [
-    // isProcessing,
-    // actionInProgress,
-    // validateConnection,
-    // validateAttack,
+    isProcessing,
+    actionInProgress,
+    validateConnection,
     client,
     account,
-    // player,
-    // gameStats,
-    // getCurrentGatekeeper,
+    player,
+    gameStats,
     dojoState,
-    // setActionInProgress,
-    // setError,
-    // setLastTransaction,
-    // addGatekeeperBattle,
-    // updateGatekeeper,
+    setActionInProgress,
+    setError,
+    setLastTransaction,
   ]);
 
-  // // Reset function
-  // const reset = useCallback(() => {
-  //   console.log("🔄 Resetting attack state");
-  //   setActionState({ status: "idle", error: null, txHash: null });
-  //   setError(null);
-  //   setActionInProgress(false);
-  // }, [setError, setActionInProgress]);
+  // Reset function
+  const reset = useCallback(() => {
+    console.log("🔄 Resetting attack state");
+    setActionState({ status: "idle", error: null, txHash: null });
+    setError(null);
+    setActionInProgress(false);
+  }, [setError, setActionInProgress]);
 
   // Auto-reset on connection change
-  // useEffect(() => {
-  //   if (connectionStatus !== "connected") {
-  //     reset();
-  //   }
-  // }, [connectionStatus, reset]);
+  useEffect(() => {
+    if (connectionStatus !== "connected") {
+      reset();
+    }
+  }, [connectionStatus, reset]);
 
   return {
     // State
-    // status: actionState.status,
-    // error: actionState.error,
-    // txHash: actionState.txHash,
-    // isProcessing,
-    // isConnected: connectionStatus === "connected",
-    // canAttack: canAttackGatekeeper(),
-    // currentGatekeeper: getCurrentGatekeeper(),
+    status: actionState.status,
+    error: actionState.error,
+    txHash: actionState.txHash,
+    isProcessing,
+    isConnected: connectionStatus === "connected",
+    canAttack: canAttackGatekeeper(),
 
     // Actions
     attackGatekeeper,
-    // reset,
+    reset,
   };
 };
 
@@ -555,235 +412,120 @@ export const useInteractWithShrine = () => {
   const { account } = useAccount();
   const { status: connectionStatus } = useStarknetConnect();
 
+  const { refetchHealth } = useHealth();
+  const { refetchPlayerStats } = usePlayerData();
+  const { refetch } = useInventory();
   // Store state and actions
   const {
     setActionInProgress,
     setError,
     setLastTransaction,
     addShrineInteraction,
-    addTrapTrigger,
-    updateShrine,
-    setInventory,
     canInteractWithShrine,
-    getShrineAtPosition,
     player,
-    position,
-    inventory,
     gameStats,
     actionInProgress,
+    stepCount,
+    health,
+    inventory,
   } = useAppStore();
 
   // Local action state
-  // const [actionState, setActionState] = useState<ActionState>({
-  //   status: "idle",
-  //   error: null,
-  //   txHash: null,
-  // });
+  const [actionState, setActionState] = useState<ActionState>({
+    status: "idle",
+    error: null,
+    txHash: null,
+  });
 
-  // // Get current shrine based on player position
-  // const getCurrentShrine = useCallback(() => {
-  //   if (!position) return null;
-  //   return getShrineAtPosition(Number(position.x));
-  // }, [position, getShrineAtPosition]);
+  // Validation helpers - Fixed dependency array
+  const validateConnection = useCallback((): string | null => {
+    if (connectionStatus !== "connected") {
+      return "Wallet not connected. Please connect your wallet first.";
+    }
+    if (!account) {
+      return "No account found. Please connect your wallet.";
+    }
+    if (!player) {
+      return "Player not initialized";
+    }
+    return null;
+  }, [connectionStatus, account, player]);
 
-  // // Validation helpers
-  // const validateConnection = useCallback((): string | null => {
-  //   if (connectionStatus !== "connected") {
-  //     return "Wallet not connected. Please connect your wallet first.";
-  //   }
-  //   if (!account) {
-  //     return "No account found. Please connect your wallet.";
-  //   }
-  //   if (!player) {
-  //     return "Player not initialized";
-  //   }
-  //   return null;
-  // }, [connectionStatus, account, player]);
+  const isProcessing = actionState.status === "processing";
 
-  // const validateInteraction = useCallback(
-  //   (burnSteps: BigNumberish): string | null => {
-  //     if (!canInteractWithShrine()) {
-  //       return "Cannot interact with shrine at this time";
-  //     }
-
-  //     const currentShrine = getCurrentShrine();
-  //     if (!currentShrine) {
-  //       return "No shrine found at current position";
-  //     }
-
-  //     if (!currentShrine.is_active) {
-  //       return "Shrine is not active";
-  //     }
-
-  //     const stepsToburn = Number(burnSteps);
-  //     if (stepsToburn > gameStats.currentSteps) {
-  //       return `Not enough steps. You have ${gameStats.currentSteps}, trying to burn ${stepsToburn}`;
-  //     }
-
-  //     return null;
-  //   },
-  //   [canInteractWithShrine, getCurrentShrine, gameStats]
-  // );
-
-  // const isProcessing = actionState.status === "processing";
-
-  // Helper function to calculate recommended steps to burn
-  // const getRecommendedStepsBurn = useCallback(() => {
-  //   const currentShrine = getCurrentShrine();
-  //   if (!currentShrine || !player) return 0;
-
-  //   const recommendedBurn = Math.max(
-  //     1,
-  //     Math.floor(gameStats.currentSteps * 0.1)
-  //   );
-  //   return Math.min(recommendedBurn, gameStats.currentSteps);
-  // }, [getCurrentShrine, player, gameStats]);
-
-  // Core interact function
+  // Core interact function - Fixed dependencies
   const interactWithShrine = useCallback(
     async (burnSteps: BigNumberish): Promise<ActionResult> => {
-      // if (isProcessing || actionInProgress) {
-      //   return { success: false, error: "Action already in progress" };
-      // }
-
-      // const validationError = validateConnection();
-      // if (validationError) {
-      //   setActionState({
-      //     status: "error",
-      //     error: validationError,
-      //     txHash: null,
-      //   });
-      //   return { success: false, error: validationError };
-      // }
-
-      // const interactionError = validateInteraction(burnSteps);
-      // if (interactionError) {
-      //   setActionState({
-      //     status: "error",
-      //     error: interactionError,
-      //     txHash: null,
-      //   });
-      //   return { success: false, error: interactionError };
-      // }
+      const validationError = validateConnection();
+      if (validationError) {
+        setActionState({
+          status: "error",
+          error: validationError,
+          txHash: null,
+        });
+        return { success: false, error: validationError };
+      }
 
       const transactionId = uuidv4();
-      // const currentShrine = getCurrentShrine()!;
       const shrineId = generateRandomU64();
-      const burnStep=1;
+
       try {
         // Start processing
-        // setActionState({ status: "processing", error: null, txHash: null });
-        // setActionInProgress(true);
-        // setError(null);
+        setActionState({ status: "processing", error: null, txHash: null });
+        setActionInProgress(true);
+        setError(null);
 
         console.log("🛕 Interacting with shrine...", {
           shrineId: shrineId.toString(),
-          burnSteps: burnStep,
-          // isTrap: currentShrine.is_trap,
+          burnSteps: burnSteps.toString(), // Convert to string for logging
         });
 
         // Execute shrine interaction transaction
         const interactionTx = await client.actions.interactWithShrine(
           account as Account,
           shrineId,
-          burnStep
+          burnSteps
         );
         console.log("📥 Shrine interaction transaction:", interactionTx);
 
-        // if (!interactionTx || interactionTx.code !== "SUCCESS") {
-        //   throw new Error(
-        //     `Shrine interaction failed: ${
-        //       interactionTx?.code || "Unknown error"
-        //     }`
-        //   );
-        // }
+        if (!interactionTx || interactionTx.code !== "SUCCESS") {
+          throw new Error(
+            `Shrine interaction failed: ${
+              interactionTx?.code || "Unknown error"
+            }`
+          );
+        }
 
-        // // Update state with transaction hash
-        // setActionState((prev) => ({
-        //   ...prev,
-        //   txHash: interactionTx.transaction_hash,
-        // }));
-        // setLastTransaction(interactionTx.transaction_hash);
+        // Update state with transaction hash
+        setActionState((prev) => ({
+          ...prev,
+          txHash: interactionTx.transaction_hash,
+        }));
+        setLastTransaction(interactionTx.transaction_hash);
 
-        // // Optimistic updates based on shrine data
-        // if (currentShrine.is_trap) {
-        //   // Handle trap interaction
-        //   const trapEvent: models.TrapTriggered = {
-        //     player: player?.player || "0x0",
-        //     shrine_id: currentShrine.shrine_id,
-        //   };
-        //   addTrapTrigger(trapEvent);
+        // Wait for transaction processing
+        console.log("⏳ Processing shrine interaction...");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        
+         await refetchHealth();
+        // await refetchPlayerStats();
+        // await refetch();
+        console.log("current health",health?.current);
+        
 
-        //   const interactionEvent: models.ShrineInteraction = {
-        //     player: player?.player || "0x0",
-        //     shrine_id: currentShrine.shrine_id,
-        //     steps_burned: burnSteps,
-        //     reward_received: 0,
-        //   };
-        //   addShrineInteraction(interactionEvent);
-        // } else {
-        //   // Handle normal shrine interaction
-        //   let rewardReceived = Number(currentShrine.blessing || 0);
-
-        //   if (currentShrine.cosmetic && currentShrine.cosmetic.isSome()) {
-        //     rewardReceived = Number(currentShrine.cosmetic.unwrap());
-        //   }
-
-        //   const interactionEvent: models.ShrineInteraction = {
-        //     player: player?.player || "0x0",
-        //     shrine_id: currentShrine.shrine_id,
-        //     steps_burned: burnSteps,
-        //     reward_received: rewardReceived,
-        //   };
-        //   addShrineInteraction(interactionEvent);
-
-        //   // Update inventory optimistically
-        //   if (inventory) {
-        //     const newInventory: models.Inventory = { ...inventory };
-
-        //     if (currentShrine.blessing && Number(currentShrine.blessing) > 0) {
-        //       newInventory.blessings = [
-        //         ...newInventory.blessings,
-        //         currentShrine.blessing,
-        //       ];
-        //     }
-        //     let x :BigNumberish=0
-        //     if (currentShrine.cosmetic && currentShrine.cosmetic.isSome()) {
-        //       const cosmeticValue = currentShrine.cosmetic.unwrap();
-        //       newInventory.cosmetics = [
-        //         ...(newInventory.cosmetics || x),
-        //         cosmeticValue || x,
-        //       ];
-        //     }
-
-        //     setInventory(newInventory);
-        //   }
-        // }
-
-        // Deactivate the shrine after interaction
-        // const updatedShrine: models.Shrine = {
-        //   ...currentShrine,
-        //   is_active: false,
-        // };
-        // updateShrine(updatedShrine);
-
-        // // Wait for transaction processing
-        // console.log("⏳ Processing shrine interaction...");
-        // await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        // // Confirm transaction
-        // dojoState.confirmTransaction(transactionId);
-
-        // // Update final state
-        // setActionState({
-        //   status: "success",
-        //   error: null,
-        //   txHash: interactionTx.transaction_hash,
-        // });
-        // setActionInProgress(false);
-
+        // Confirm transaction
+        dojoState.confirmTransaction(transactionId);
+       
+        
+          // Update final state
+          setActionState({
+            status: "success",
+            error: null,
+            txHash: interactionTx.transaction_hash,
+          });
+        setActionInProgress(false);
+ 
         console.log("🛕 Shrine interaction successful!", {
-          // isTrap: currentShrine.is_trap,
           stepsBurned: burnSteps.toString(),
         });
 
@@ -797,68 +539,58 @@ export const useInteractWithShrine = () => {
             ? error.message
             : "Failed to interact with shrine. Please try again.";
 
-        // console.error("❌ Shrine interaction error:", error);
+        console.error("❌ Shrine interaction error:", error);
 
-        // // Cleanup on error
-        // dojoState.revertOptimisticUpdate(transactionId);
-        // setActionState({ status: "error", error: errorMessage, txHash: null });
-        // setError(errorMessage);
-        // setActionInProgress(false);
+        // Cleanup on error
+        dojoState.revertOptimisticUpdate(transactionId);
+        setActionState({ status: "error", error: errorMessage, txHash: null });
+        setError(errorMessage);
+        setActionInProgress(false);
 
         return { success: false, error: errorMessage };
       }
     },
     [
-      // isProcessing,
+      isProcessing,
       actionInProgress,
-      // validateConnection,
-      // validateInteraction,
+      validateConnection,
       client,
       account,
-      player,
-      inventory,
-      gameStats,
-      // getCurrentShrine,
       dojoState,
       setActionInProgress,
       setError,
       setLastTransaction,
       addShrineInteraction,
-      addTrapTrigger,
-      updateShrine,
-      setInventory,
     ]
   );
 
   // Reset function
-  // const reset = useCallback(() => {
-  //   console.log("🔄 Resetting shrine interaction state");
-  //   setActionState({ status: "idle", error: null, txHash: null });
-  //   setError(null);
-  //   setActionInProgress(false);
-  // }, [setError, setActionInProgress]);
+  const reset = useCallback(() => {
+    console.log("🔄 Resetting shrine interaction state");
+    setActionState({ status: "idle", error: null, txHash: null });
+    setError(null);
+    setActionInProgress(false);
+  }, [setError, setActionInProgress]);
 
-  // // Auto-reset on connection change
-  // useEffect(() => {
-  //   if (connectionStatus !== "connected") {
-  //     reset();
-  //   }
-  // }, [connectionStatus, reset]);
+  // Auto-reset on connection change
+  useEffect(() => {
+    if (connectionStatus !== "connected") {
+      reset();
+    }
+  }, [connectionStatus, reset]);
 
   return {
-  //   // State
-  //   status: actionState.status,
-  //   error: actionState.error,
-  //   txHash: actionState.txHash,
-  //   isProcessing,
-  //   isConnected: connectionStatus === "connected",
-  //   canInteract: canInteractWithShrine(),
-  //   currentShrine: getCurrentShrine(),
-  //   recommendedStepsBurn: getRecommendedStepsBurn(),
-  //   availableSteps: gameStats.currentSteps,
+    // State
+    status: actionState.status,
+    error: actionState.error,
+    txHash: actionState.txHash,
+    isProcessing,
+    isConnected: connectionStatus === "connected",
+    canInteract: canInteractWithShrine(),
+    availableSteps: gameStats?.currentSteps || 0, // Safe access
 
-  //   // Actions
+    // Actions
     interactWithShrine,
-  //   reset,
+    reset,
   };
 };

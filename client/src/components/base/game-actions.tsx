@@ -16,9 +16,7 @@ import { useStepForward } from "../../dojo/hooks/useStepForward";
 import {
   useTakeDamage,
   useAttackGatekeeper,
-  useInteractWithShrine,
-  useCreateGatekeeper,
-  useCreateShrine,
+  useInteractWithShrine, 
 } from "../../dojo/hooks/useGameActions";
 
 export function GameActions() {
@@ -28,9 +26,7 @@ export function GameActions() {
   const stepForward = useStepForward();
   const takeDamage = useTakeDamage();
   const attackGatekeeper = useAttackGatekeeper();
-  const interactWithShrine = useInteractWithShrine();
-  const createGatekeeper = useCreateGatekeeper();
-  const createShrine = useCreateShrine();
+  const interactWithShrine = useInteractWithShrine(); 
 
   const actions = [
     {
@@ -92,47 +88,8 @@ export function GameActions() {
       // },
       // canExecute: !attackGatekeeper.isProcessing,
     },
-    {
-      icon: Shield,
-      label: "Create Gatekeeper",
-      description: "Spawn a gatekeeper (100 HP, 10 DMG)",
-      onClick: () => {
-        const currentPosition = position?.x || 0;
-        createGatekeeper.createGatekeeper(currentPosition, 100, 10);
-      },
-      color: "from-gray-500 to-gray-600",
-      state: {
-        isLoading: false,
-        error: null,
-        txStatus: null,
-        txHash: null,
-      },
-      canExecute: Boolean(player),
-    },
-    {
-      icon: Gem,
-      label: "Create Shrine",
-      description: "Spawn a shrine with blessing",
-      onClick: () => {
-        const currentPosition = position?.x || 0;
-        const randomBlessing = Math.floor(Math.random() * 50) + 10; // 10-59 blessing
-        const isTrap = Math.random() < 0.2; // 20% chance of trap
-        createShrine.createShrine(
-          currentPosition,
-          randomBlessing,
-          undefined,
-          isTrap
-        );
-      },
-      color: "from-cyan-500 to-cyan-600",
-      state: {
-        isLoading: false,
-        error: null,
-        txStatus: null,
-        txHash: null,
-      },
-      canExecute: Boolean(player),
-    },
+     
+    
     {
       icon: Sparkles,
       label: "Interact with Shrine",

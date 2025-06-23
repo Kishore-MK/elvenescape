@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 import * as THREE from 'three';
+import { useAttackGatekeeper } from '../dojo/hooks/useGameActions';
 
 interface EnemyProps { 
   position?: [number, number, number];
@@ -11,8 +12,7 @@ interface EnemyProps {
   visible?: boolean;
   playerPosition?: THREE.Vector3;
   triggerDistance?: number;
-  onDamage?: (amount: number) => void;
-  onKillReward?: (egoAmount: number) => void;
+  onDamage?: (amount: number) => void; 
   damagePerSecond?: number;
 }
 
@@ -23,8 +23,7 @@ const Enemy: React.FC<EnemyProps> = ({
   visible = true,
   playerPosition,
   triggerDistance = 3,
-  onDamage,
-  onKillReward,
+  onDamage, 
   damagePerSecond = 10
 }) => {
   const groupRef = useRef<THREE.Group>(null);
@@ -41,6 +40,7 @@ const Enemy: React.FC<EnemyProps> = ({
   const clonedScene = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene);
     
+ 
     // Clone materials to ensure each enemy has unique materials
     cloned.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
@@ -56,7 +56,8 @@ const Enemy: React.FC<EnemyProps> = ({
   }, [scene]);
   
   const { actions, mixer } = useAnimations(animations, clonedScene);
-
+ const attackGatekeeper = useAttackGatekeeper();
+   
   // Enable shadows for all meshes in the cloned model
   useEffect(() => {
     clonedScene.traverse((child) => {
@@ -95,17 +96,14 @@ const Enemy: React.FC<EnemyProps> = ({
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showInteraction, isDead]);
 
-  const handleAttack = () => {
+  const handleAttack = async () => {
     if (isDead) return; // Prevent multiple kills
     
     setIsDead(true);
     setShowInteraction(false);
     
-    // Give ego reward when enemy is killed
-    if (onKillReward) {
-      onKillReward(15);
-    }
     
+    await attackGatekeeper.attackGatekeeper()
     console.log(`Enemy killed! +15 ego`);
   };
 

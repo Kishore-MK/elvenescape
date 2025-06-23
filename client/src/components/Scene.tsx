@@ -9,38 +9,32 @@ import Shrine from "./Shrine";
 import Enemy from "./Enemy";
 import { useMovement } from "../hooks/useMovement";
 import Entities from "./Entities";
+import { Inventory } from "../dojo/bindings";
 
 interface GameState {
-  health: number;
+  currentHealth: number;
   ego: number;
   steps: number;
-  inventory: {
-    crystals: number;
-    artifacts: number;
-  };
+  inventory: Inventory | null;
 }
 
 interface SceneProps {
   gameState: GameState;
-  onDamage: (amount: number) => void;
-  onKillReward: (egoAmount: number) => void;
-  onStep: () => void;
+  onDamage: (amount: number) => void; 
+  onStep: () => void; 
 }
+
+
 
 // Main scene component
 const Scene: React.FC<SceneProps> = ({ 
   gameState, 
-  onDamage, 
-  onKillReward, 
-  onStep 
+  onDamage,  
+  onStep, 
 }) => {
   const { position } = useMovement(5);
   const { gl } = useThree();
-  
-  // Separate visibility states for shrine and enemy
-  const [showShrine, setShowShrine] = useState(true);
-  const [showEnemy, setShowEnemy] = useState(true);
-  
+ 
   // Enable shadow mapping on the renderer
   React.useEffect(() => {
     gl.shadowMap.enabled = true;
@@ -81,17 +75,16 @@ const Scene: React.FC<SceneProps> = ({
       <Track />
       <Player 
         onStep={onStep}
-        health={gameState.health}
+        health={gameState.currentHealth}
       />
-      <Entities 
-        shrineCount={3} 
-        enemyCount={5} 
-        spawnAreaStart={30} 
-        spawnAreaEnd={300}
-        onDamage={onDamage}
-        onKillReward={onKillReward}
-        damagePerSecond={10}
-      />
+       <Entities
+    shrineCount={3}
+    enemyCount={5}
+    spawnAreaStart={30}
+    spawnAreaEnd={300}
+    onDamage={onDamage}  
+    damagePerSecond={10}
+  />
     </>
   );
 };

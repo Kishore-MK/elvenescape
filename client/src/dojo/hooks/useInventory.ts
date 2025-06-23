@@ -37,6 +37,7 @@ export const useInventory = () => {
 
   const fetchInventory = async () => {
     if (!playerAddress) return;
+console.log("Fetching Inventory...");
 
     setIsLoading(true);
     setError(null);
