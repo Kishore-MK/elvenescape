@@ -27,8 +27,7 @@ export function StatusBar() {
   const {
     isLoading: isInitializing,
     error: initError,
-    txHash: initTxHash,
-    isConnected: initIsConnected,
+    txHash: initTxHash, 
     actionInProgress: initActionInProgress,
     initializePlayer,
     reset: resetInitializer
@@ -38,8 +37,7 @@ export function StatusBar() {
     status: spawnStatus,
     error: spawnError,
     txHash: spawnTxHash,
-    isProcessing: isSpawning,
-    isConnected: spawnIsConnected,
+    isProcessing: isSpawning, 
     playerExists,
     gamePhase: spawnGamePhase,
     actionInProgress: spawnActionInProgress,

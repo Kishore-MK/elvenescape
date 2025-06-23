@@ -6,9 +6,7 @@ import {
   ExternalLink,
   Sword,
   Heart,
-  Sparkles,
-  Shield,
-  Gem,
+  Sparkles, 
 } from "lucide-react";
 
 import useAppStore from "../../zustand/store";
@@ -20,8 +18,7 @@ import {
 } from "../../dojo/hooks/useGameActions";
 
 export function GameActions() {
-  const player = useAppStore((state) => state.player);
-  const { position} = useAppStore();
+  const player = useAppStore((state) => state.player); 
   // Hook implementations
   const stepForward = useStepForward();
   const takeDamage = useTakeDamage();

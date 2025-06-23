@@ -503,7 +503,7 @@ const useAppStore = create<AppStore>()(
 
       getShrineAtPosition: (position: number) => {
         const state = get();
-        for (const [id, shrine] of state.shrines) {
+        for (const [, shrine] of state.shrines) {
           if (Number(shrine.position) === position && shrine.is_active) {
             return shrine;
           }
@@ -515,7 +515,7 @@ const useAppStore = create<AppStore>()(
         const state = get();
         console.log("Printing state for getGatekeeperAtPosition",state.gatekeepers);
         
-        for (const [id, gatekeeper] of state.gatekeepers) {
+        for (const [, gatekeeper] of state.gatekeepers) {
           if (Number(gatekeeper.position) === position && Number(gatekeeper.health) > 0) {
             return gatekeeper;
           }

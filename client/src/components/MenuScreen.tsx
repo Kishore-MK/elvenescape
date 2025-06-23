@@ -39,8 +39,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ onStartGame, audioControls }) =
   const {
     error: spawnError,
     isProcessing: isSpawning,
-    playerExists,
-    gamePhase: spawnGamePhase,
+    playerExists, 
     spawnPlayer,
   } = useSpawnPlayer();
 

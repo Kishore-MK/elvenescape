@@ -2,9 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { Progress } from "../ui/progress"
 import { useAccount } from "@starknet-react/core"
 import useAppStore from "../../zustand/store"
-import { Coins, Zap, Heart, Loader2, AlertTriangle, Footprints } from "lucide-react"
-import { useCurrentEncounter } from "../../dojo/hooks/useCurrentEncounter"
-import { Button } from "../ui/button"
+import { Coins, Zap, Heart, Loader2, AlertTriangle, Footprints } from "lucide-react" 
 
 export function PlayerStats() {
   const { status } = useAccount();

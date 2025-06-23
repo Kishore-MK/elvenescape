@@ -1,12 +1,9 @@
-import React, { useState } from "react";
-import { OrbitControls } from "@react-three/drei";
-import { useFrame, useThree } from "@react-three/fiber";
+import React from "react"; 
+import {  useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import Track from "./Track";
 import Player from "./Player";
-import CameraController from "./CameraController";
-import Shrine from "./Shrine";
-import Enemy from "./Enemy";
+import CameraController from "./CameraController"; 
 import { useMovement } from "../hooks/useMovement";
 import Entities from "./Entities";
 import { Inventory } from "../dojo/bindings";
