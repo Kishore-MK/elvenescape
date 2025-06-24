@@ -75,10 +75,10 @@ const Scene: React.FC<SceneProps> = ({
         health={gameState.currentHealth}
       />
        <Entities
-    shrineCount={3}
-    enemyCount={5}
-    spawnAreaStart={30}
-    spawnAreaEnd={300}
+    shrineCount={7}
+    enemyCount={15}
+    spawnAreaStart={-100}
+    spawnAreaEnd={800}
     onDamage={onDamage}  
     damagePerSecond={10}
   />

@@ -167,7 +167,7 @@ const Game: React.FC<GameProps> = ({ onReturnToMenu, audioControls }) => {
   style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
   className="px-6 py-3 bg-gray-600 hover:bg-gray-500 rounded-lg font-bold transition-colors"
 >
-  Main Menu
+  Play Again
 </button>
           </div>
         </div>

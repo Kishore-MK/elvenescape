@@ -11,9 +11,9 @@ interface MovementState {
 export const useMovement = (speed: number = 5, onStep?: () => void): MovementState => {
   const [keys, setKeys] = useState<{ [key: string]: boolean }>({});
   const [isMoving, setIsMoving] = useState(false);
-  const [position, setPosition] = useState(new THREE.Vector3(0, 0, 0));
+  const [position, setPosition] = useState(new THREE.Vector3(0, 0, -120));
   const [isTouching, setIsTouching] = useState(false);
-  const lastPosition = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  const lastPosition = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, -120));
   const stepThreshold = 0.5; // Distance threshold to count as a step
   const distanceAccumulator = useRef<number>(0);
 
