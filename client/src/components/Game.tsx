@@ -158,11 +158,17 @@ const Game: React.FC<GameProps> = ({ onReturnToMenu, audioControls }) => {
               Play Again
             </button> */}
             <button
-              onClick={onReturnToMenu}
-              className="px-6 py-3 bg-gray-600 hover:bg-gray-500 rounded-lg font-bold transition-colors"
-            >
-              Main Menu
-            </button>
+  onClick={onReturnToMenu}
+  onTouchEnd={(e) => {
+    e.stopPropagation();
+    onReturnToMenu();
+  }}
+  onTouchStart={(e) => e.stopPropagation()}
+  style={{ pointerEvents: 'auto', touchAction: 'manipulation' }}
+  className="px-6 py-3 bg-gray-600 hover:bg-gray-500 rounded-lg font-bold transition-colors"
+>
+  Main Menu
+</button>
           </div>
         </div>
       )}
