@@ -118,30 +118,29 @@ const Game: React.FC<GameProps> = ({ onReturnToMenu, audioControls }) => {
       {/* Game UI Overlay */}
       <GameUI />
 
-      {/* Game Controls UI */}
-      <div className="absolute top-5 right-5 text-white font-sans text-sm bg-black bg-opacity-50 p-3 rounded-lg border border-white border-opacity-30">
-        <div className="mb-2 font-bold">Fog Walker</div>
-        <div className="mb-1">W: Move</div>
-        <div className="mb-1">
-          E: Attack enemy /<br />
-          Activate Shrine
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={audioControls.toggleMute}
-            className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors pointer-events-auto"
-          >
-            {audioControls.isMuted ? "🔇" : "🔊"}
-          </button>
-          <button
-            onClick={onReturnToMenu}
-            className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors pointer-events-auto"
-          >
-            ← Menu
-          </button>
-        </div>
-      </div>
-
+     {/* Game Controls UI */}
+<div className="absolute bottom-5 right-5 text-white font-sans text-sm bg-black bg-opacity-50 p-3 rounded-lg border border-white border-opacity-30 hidden sm:block">
+  <div className="mb-2 font-bold">How to play?</div>
+  <div className="mb-1">W: Move</div>
+  <div className="mb-1">
+    E: Attack enemy /<br />
+    Activate Shrine
+  </div>
+  <div className="flex gap-2">
+    <button
+      onClick={audioControls.toggleMute}
+      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors pointer-events-auto"
+    >
+      {audioControls.isMuted ? "🔇" : "🔊"}
+    </button>
+    <button
+      onClick={onReturnToMenu}
+      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors pointer-events-auto"
+    >
+      ← Menu
+    </button>
+  </div>
+</div>
       {/* Game Over Overlay */}
       {currentHealth <= 0 && (
         <div className="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
