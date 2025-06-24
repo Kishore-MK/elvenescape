@@ -36,7 +36,7 @@ const Shrine: React.FC<ShrineProps> = ({
   const { refetch } = usePlayerStats();
   // Clone the scene to avoid issues with multiple instances
   const clonedScene = useMemo(() => scene.clone(), [scene]);
-  const {
+  const {health,
     setGamePhase
   } = useAppStore();
   const interactWithShrine = useInteractWithShrine();
@@ -65,23 +65,29 @@ const Shrine: React.FC<ShrineProps> = ({
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [showInteraction, isActivated]);
 
- const handleActivate = async () => {
-  setGamePhase(GamePhase.AT_SHRINE)
-  // Set loading state to disable all interactions and start timer
-  setIsActivated(true);
-  setShowInteraction(false);
-  setActivationStartTime(Date.now());
-  
-  console.log("Calling activate shrine");
-  await interactWithShrine.interactWithShrine(10n);
-  
-  // Wait 5 seconds for the gold transition to complete
-  await new Promise(resolve => setTimeout(resolve, 4000));
-  await refetch();
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  setGamePhase(GamePhase.WALKING);
-  setIsActivated(false); // Reset activation state
-};
+  const handleActivate = async () => {
+    setGamePhase(GamePhase.AT_SHRINE)
+    // Set loading state to disable all interactions and start timer
+    setIsActivated(true);
+    setShowInteraction(false);
+    setActivationStartTime(Date.now());
+    
+    console.log("Calling activate shrine");
+    await interactWithShrine.interactWithShrine(10n);
+    
+    // Wait 5 seconds for the gold transition to complete
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    await refetch();
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  if(Number(health?.current)>0){
+    setGamePhase(GamePhase.WALKING);
+
+  }
+  else{
+    setGamePhase(GamePhase.DEAD)
+  }
+    setIsActivated(false); // Reset activation state
+  };
 
   // Add subtle floating animation, glow effects, and distance-based visibility
   useFrame((state) => {
@@ -153,35 +159,62 @@ const Shrine: React.FC<ShrineProps> = ({
     }
   });
 
+  // Handle mobile touch activation
+  const handleTouchActivate = (event: TouchEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (showInteraction && !isActivated) {
+      handleActivate();
+    }
+  };
+
   // Use effect to handle popup outside of Three.js context
   useEffect(() => {
     if (showInteraction || isActivated) {
       // Create popup element
       const popup = document.createElement("div");
-      popup.className =
-        "fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-blue-400 text-base font-bold z-40 flex items-center gap-2";
       
       if (isActivated) {
+        popup.className =
+          "fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-yellow-400 text-base font-bold z-40 flex items-center gap-2";
         popup.innerHTML = `
-          <div class="w-2 h-2 bg-gold-400 rounded-full animate-pulse"></div>
+          <div class="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
           Activating Shrine...
         `;
       } else {
+        popup.className =
+          "fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-8 py-4 rounded-full border-2 border-white text-lg font-bold z-40 flex items-center gap-3 shadow-lg cursor-pointer select-none transition-colors duration-150";
         popup.innerHTML = `
-          <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-          Press E to Activate Shrine
+          <div class="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+          ACTIVATE
         `;
+
+        // Add touch event listeners for mobile
+        popup.addEventListener('touchstart', handleTouchActivate, { passive: false });
+        
+        // Add click event for desktop fallback
+        popup.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (showInteraction && !isActivated) {
+            handleActivate();
+          }
+        });
+
+        // Prevent text selection and context menu
+        popup.addEventListener('selectstart', (e) => e.preventDefault());
+        popup.addEventListener('contextmenu', (e) => e.preventDefault());
       }
       
       popup.id = "shrine-interaction-popup";
-
       document.body.appendChild(popup);
 
       return () => {
-        const existingPopup = document.getElementById(
-          "shrine-interaction-popup"
-        );
+        const existingPopup = document.getElementById("shrine-interaction-popup");
         if (existingPopup) {
+          if (!isActivated) {
+            existingPopup.removeEventListener('touchstart', handleTouchActivate);
+          }
           document.body.removeChild(existingPopup);
         }
       };
@@ -210,4 +243,4 @@ const Shrine: React.FC<ShrineProps> = ({
 // Preload the model for better performance
 useGLTF.preload("/assets/extra/shrine.gltf");
 
-export default Shrine;  
+export default Shrine;

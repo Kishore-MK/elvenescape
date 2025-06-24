@@ -36,6 +36,7 @@ const Enemy: React.FC<EnemyProps> = ({
   const [isAttacking, setIsAttacking] = useState(false);
   const [fadeOpacity, setFadeOpacity] = useState(1);
   const damageTimer = useRef(0);
+
   const { setGamePhase } = useAppStore();
   const { refetch } = usePlayerStats();
   const { scene, animations } = useGLTF("/assets/extra/enemy.gltf");
@@ -43,7 +44,6 @@ const Enemy: React.FC<EnemyProps> = ({
   // Clone the scene properly for animations and materials
   const clonedScene = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene);
-
     // Clone materials to ensure each enemy has unique materials
     cloned.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
@@ -54,7 +54,6 @@ const Enemy: React.FC<EnemyProps> = ({
         }
       }
     });
-
     return cloned;
   }, [scene]);
 
@@ -142,7 +141,6 @@ const Enemy: React.FC<EnemyProps> = ({
     if (isDead && fadeOpacity > 0) {
       const newOpacity = Math.max(0, fadeOpacity - delta * 2); // 0.5 second fade
       setFadeOpacity(newOpacity);
-
       // Hide completely when fully faded
       if (newOpacity <= 0 && groupRef.current) {
         groupRef.current.visible = false;
@@ -152,7 +150,6 @@ const Enemy: React.FC<EnemyProps> = ({
     if (groupRef.current && playerPosition && !isDead) {
       // Get the actual world position of the enemy
       groupRef.current.getWorldPosition(enemyWorldPosition.current);
-
       // Calculate distance to player
       const distance = enemyWorldPosition.current.distanceTo(playerPosition);
 
@@ -166,7 +163,6 @@ const Enemy: React.FC<EnemyProps> = ({
       if (wasPlayerNear !== nowPlayerNear) {
         setIsPlayerNear(nowPlayerNear);
         setShowInteraction(nowPlayerNear);
-
         // Reset damage timer when player enters/leaves range
         damageTimer.current = 0;
       }
@@ -174,7 +170,6 @@ const Enemy: React.FC<EnemyProps> = ({
       // Deal continuous damage when player is near
       if (isPlayerNear && onDamage) {
         damageTimer.current += delta;
-
         // Deal damage every second
         if (damageTimer.current >= 1.0) {
           onDamage(damagePerSecond);
@@ -194,26 +189,50 @@ const Enemy: React.FC<EnemyProps> = ({
     }
   });
 
+  // Handle mobile touch attack
+  const handleTouchAttack = (event: TouchEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (showInteraction && !isDead && !isAttacking) {
+      handleAttack();
+    }
+  };
+
   // Use effect to handle popup outside of Three.js context
   useEffect(() => {
     if (showInteraction && !isDead) {
       // Create popup element
       const popup = document.createElement("div");
       popup.className =
-        "fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-5 py-2 rounded-lg border-2 border-white text-base font-bold z-40 flex items-center gap-2";
+        "fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white px-8 py-4 rounded-full border-2 border-white text-lg font-bold z-40 flex items-center gap-3 shadow-lg cursor-pointer select-none transition-colors duration-150";
       popup.innerHTML = `
-        <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-        ${isAttacking ? 'Attacking...' : 'Press E to Attack'}
+        <div class="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+        ${isAttacking ? 'Attacking...' : 'ATTACK'}
       `;
       popup.id = "enemy-interaction-popup";
+
+      // Add touch event listeners for mobile
+      popup.addEventListener('touchstart', handleTouchAttack, { passive: false });
+      
+      // Add click event for desktop fallback
+      popup.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (showInteraction && !isDead && !isAttacking) {
+          handleAttack();
+        }
+      });
+
+      // Prevent text selection and context menu
+      popup.addEventListener('selectstart', (e) => e.preventDefault());
+      popup.addEventListener('contextmenu', (e) => e.preventDefault());
 
       document.body.appendChild(popup);
 
       return () => {
-        const existingPopup = document.getElementById(
-          "enemy-interaction-popup"
-        );
+        const existingPopup = document.getElementById("enemy-interaction-popup");
         if (existingPopup) {
+          existingPopup.removeEventListener('touchstart', handleTouchAttack);
           document.body.removeChild(existingPopup);
         }
       };
@@ -226,8 +245,6 @@ const Enemy: React.FC<EnemyProps> = ({
     </group>
   );
 };
-
- 
 
 // Preload the model for better performance
 useGLTF.preload("/assets/extra/enemy.gltf");
