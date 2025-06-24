@@ -137,6 +137,32 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
         backgroundImage: `url(assets/bg.jpg)`,
       }}
     >
+      {/* Audio Controls */}
+        <div className="absolute top-8 left-8 z-20 flex items-center gap-4">
+          <button
+            className="bg-black/50 border border-white/30 rounded-full w-12 h-12 text-white text-xl
+                     cursor-pointer transition-all duration-300 backdrop-blur-md
+                     hover:bg-black/70 hover:border-white/50 hover:scale-110"
+            onClick={audioControls.toggleMute}
+            title={audioControls.isMuted ? "Unmute" : "Mute"}
+          >
+            {audioControls.isMuted ? "🔇" : "🔊"}
+          </button>
+
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={audioControls.volume}
+            onChange={(e) =>
+              audioControls.setVolume(parseFloat(e.target.value))
+            }
+            className={`w-24 h-1 bg-white/30 rounded-full outline-none appearance-none slider ${
+              audioControls.isMuted ? "opacity-50" : "opacity-100"
+            }`}
+          />
+        </div>
       {/* Connection/Initialize Button - Top Right */}
       <div className="absolute top-8 right-8 z-20">
         <button
@@ -257,32 +283,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
           </button>
         </div>
 
-        {/* Audio Controls */}
-        <div className="absolute -bottom-32 -right-60 flex items-center gap-4">
-          <button
-            className="bg-black/50 border border-white/30 rounded-full w-12 h-12 text-white text-xl
-                     cursor-pointer transition-all duration-300 backdrop-blur-md
-                     hover:bg-black/70 hover:border-white/50 hover:scale-110"
-            onClick={audioControls.toggleMute}
-            title={audioControls.isMuted ? "Unmute" : "Mute"}
-          >
-            {audioControls.isMuted ? "🔇" : "🔊"}
-          </button>
-
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={audioControls.volume}
-            onChange={(e) =>
-              audioControls.setVolume(parseFloat(e.target.value))
-            }
-            className={`w-24 h-1 bg-white/30 rounded-full outline-none appearance-none slider ${
-              audioControls.isMuted ? "opacity-50" : "opacity-100"
-            }`}
-          />
-        </div>
+        
       </div>
 
       {/* Status message */}
